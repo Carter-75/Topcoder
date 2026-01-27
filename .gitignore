@@ -1,0 +1,43 @@
+# Python
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+*.env
+.env
+.env.*
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Test and coverage
+.coverage
+htmlcov/
+*.cover
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+dist/
+
+# Secrets
+backend/.env
+backend/.env.*
+
+# Misc
+*.bak
+*.swp
+*.tmp
+
+# Topcoder
+*.secret
