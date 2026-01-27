@@ -242,6 +242,12 @@ def settings_ui():
             button.alt { background: #0f766e; }
             button.ghost { background: #e2e8f0; color: #0f172a; }
             button:disabled { background: #a5b4fc; cursor: not-allowed; }
+            button { transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.2s ease, color 0.2s ease; }
+            button:hover { transform: translateY(-1px); box-shadow: 0 6px 16px #0f172a20; }
+            button:active { transform: translateY(0); box-shadow: none; }
+            .selected { box-shadow: 0 0 0 3px #c7d2fe; transform: translateY(-1px); }
+            .pulse { animation: pulse 0.6s ease; }
+            @keyframes pulse { 0% { box-shadow: 0 0 0 0 #c7d2fe; } 100% { box-shadow: 0 0 0 10px transparent; } }
             .status { margin-top: 0.8rem; font-size: 0.95rem; }
             .success { color: var(--success); }
             .error { color: var(--error); }
@@ -356,12 +362,18 @@ def settings_ui():
                     aiModeEl.textContent = data.require_ai_review
                         ? 'AI review is required by default.'
                         : 'Non-AI mode is allowed by default.';
+                    aiOnBtn.classList.toggle('selected', !!data.require_ai_review);
+                    aiOffBtn.classList.toggle('selected', !data.require_ai_review);
                     if (typeof data.autofix_default === 'boolean') {
                         autofixEl.textContent = data.autofix_default
                             ? 'Auto-fix is enabled by default.'
                             : 'Auto-fix is disabled by default.';
+                        autofixOnBtn.classList.toggle('selected', !!data.autofix_default);
+                        autofixOffBtn.classList.toggle('selected', !data.autofix_default);
                     } else {
                         autofixEl.textContent = 'Auto-fix default is not set.';
+                        autofixOnBtn.classList.remove('selected');
+                        autofixOffBtn.classList.remove('selected');
                     }
                 } catch (err) {
                     statusEl.textContent = 'Unable to load status.';
@@ -454,6 +466,8 @@ def settings_ui():
                     }
                     resultEl.textContent = 'AI mode updated.';
                     resultEl.classList.add('success');
+                    (value ? aiOnBtn : aiOffBtn).classList.add('pulse');
+                    setTimeout(() => (value ? aiOnBtn : aiOffBtn).classList.remove('pulse'), 650);
                     await refreshStatus();
                 } catch (err) {
                     resultEl.textContent = err.message || 'Failed to update AI mode.';
@@ -484,6 +498,8 @@ def settings_ui():
                     }
                     resultEl.textContent = 'Auto-fix updated.';
                     resultEl.classList.add('success');
+                    (value ? autofixOnBtn : autofixOffBtn).classList.add('pulse');
+                    setTimeout(() => (value ? autofixOnBtn : autofixOffBtn).classList.remove('pulse'), 650);
                     await refreshStatus();
                 } catch (err) {
                     resultEl.textContent = err.message || 'Failed to update auto-fix.';
