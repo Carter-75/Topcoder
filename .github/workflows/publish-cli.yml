@@ -21,6 +21,10 @@ jobs:
           import re
           import subprocess
           from pathlib import Path
+          from packaging.version import Version
+          import json
+          import urllib.request
+          import os
 
           def run(cmd: str) -> str:
               return subprocess.check_output(cmd, shell=True, text=True).strip()
@@ -32,7 +36,11 @@ jobs:
               Path("bump.env").write_text("bumped=false\n", encoding="utf-8")
               raise SystemExit(0)
 
-          diff = run("git diff --name-only HEAD^ HEAD")
+            before = os.environ.get("GITHUB_EVENT_BEFORE")
+            if before and before != "0000000000000000000000000000000000000000":
+              diff = run(f"git diff --name-only {before} HEAD")
+            else:
+              diff = run("git diff --name-only HEAD^ HEAD")
           changed = [line for line in diff.splitlines() if line]
           bump_paths = (
               "src/guardrails_cli/",
@@ -44,14 +52,24 @@ jobs:
               Path("bump.env").write_text("bumped=false\n", encoding="utf-8")
               raise SystemExit(0)
 
-          pyproject = Path("pyproject.toml")
+            pyproject = Path("pyproject.toml")
           text = pyproject.read_text(encoding="utf-8")
           match = re.search(r"^version\s*=\s*\"(\d+)\.(\d+)\.(\d+)\"", text, re.MULTILINE)
           if not match:
               raise SystemExit("Version not found in pyproject.toml")
-          major, minor, patch = map(int, match.groups())
-          patch += 1
-          new_version = f"{major}.{minor}.{patch}"
+            major, minor, patch = map(int, match.groups())
+            local_version = Version(f"{major}.{minor}.{patch}")
+            latest_version = local_version
+            try:
+              with urllib.request.urlopen("https://pypi.org/pypi/guardrails-cli/json", timeout=10) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                latest = data.get("info", {}).get("version")
+                if latest:
+                  latest_version = Version(latest)
+            except Exception:
+              pass
+            base_version = latest_version if latest_version > local_version else local_version
+            new_version = Version(f"{base_version.major}.{base_version.minor}.{base_version.micro + 1}")
           updated = re.sub(
               r"^version\s*=\s*\"(\d+)\.(\d+)\.(\d+)\"",
               f'version = "{new_version}"',
