@@ -54,8 +54,6 @@ def dashboard():
                 <h1>Guardrails Audit Dashboard</h1>
                 <div class="actions">
                     <a href='/settings/ui'>Settings</a>
-                    <a href='/docs'>API Docs</a>
-                    <a href='/health'>Health</a>
                 </div>
                 <p class="summary">Total Analyses: <b>{count}</b></p>
             <table>

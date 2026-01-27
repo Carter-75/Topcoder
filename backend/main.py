@@ -22,7 +22,7 @@ import settings_store
 # Import dashboard endpoint
 import dashboard
 
-app = FastAPI(title="Guardrails Backend API")
+app = FastAPI(title="Guardrails Backend API", docs_url=None, redoc_url=None)
 JOB_STORE: Dict[str, Dict[str, Any]] = {}
 APP_SETTINGS: Dict[str, Any] = {
     "openai_api_key": settings_store.load_api_key(),
@@ -176,7 +176,7 @@ def _analyze_code(
 def dashboard_view():
     return dashboard.dashboard()
 
-@app.get("/health")
+@app.get("/health", include_in_schema=False)
 def health():
     return {"status": "ok"}
 
@@ -187,6 +187,128 @@ def root():
 @app.get("/favicon.ico")
 def favicon():
     return Response(status_code=204)
+
+@app.get("/docs", include_in_schema=False)
+def docs_ui():
+    html = """
+    <!doctype html>
+    <html>
+    <head>
+        <title>Guardrails API Docs</title>
+        <meta name='viewport' content='width=device-width, initial-scale=1'>
+        <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
+        <style>
+            :root {
+                --bg: #0b1020;
+                --surface: #121933;
+                --card: #151f3d;
+                --text: #e2e8f0;
+                --muted: #94a3b8;
+                --primary: #60a5fa;
+                --primary-strong: #3b82f6;
+                --success: #22c55e;
+                --warning: #f59e0b;
+                --danger: #ef4444;
+                --border: #243158;
+                --shadow: 0 12px 30px rgba(2, 6, 23, 0.45);
+                --glow: 0 0 0 3px rgba(96, 165, 250, 0.25);
+            }
+            body {
+                margin: 0;
+                background: radial-gradient(circle at top, #141b3a 0%, #0b1020 55%, #070b16 100%);
+                color: var(--text);
+                font-family: 'Segoe UI', Arial, sans-serif;
+            }
+            .swagger-ui {
+                max-width: 1100px;
+                margin: 2rem auto;
+                padding: 1rem 1.5rem 2rem;
+                background: linear-gradient(160deg, rgba(21,31,61,0.98), rgba(16,25,48,0.96));
+                border-radius: 18px;
+                box-shadow: var(--shadow);
+                border: 1px solid var(--border);
+            }
+            .swagger-ui .topbar {
+                background: transparent;
+                border-bottom: 1px solid var(--border);
+            }
+            .swagger-ui .topbar .download-url-wrapper input[type=text] {
+                background: #0f172a;
+                color: var(--text);
+                border: 1px solid var(--border);
+            }
+            .swagger-ui .info .title,
+            .swagger-ui .opblock-tag,
+            .swagger-ui .opblock-tag small {
+                color: var(--text);
+            }
+            .swagger-ui .opblock {
+                background: rgba(15, 23, 42, 0.7);
+                border: 1px solid var(--border);
+                box-shadow: none;
+            }
+            .swagger-ui .opblock .opblock-summary {
+                border-bottom: 1px solid var(--border);
+            }
+            .swagger-ui .btn {
+                background: var(--primary-strong);
+                color: #fff;
+                border: none;
+                border-radius: 999px;
+                box-shadow: none;
+            }
+            .swagger-ui .btn:hover {
+                background: var(--primary);
+            }
+            .swagger-ui .model-box,
+            .swagger-ui .parameters-col_description input,
+            .swagger-ui .parameters-col_description textarea,
+            .swagger-ui .responses-wrapper,
+            .swagger-ui .response-content-type {
+                background: #0f172a;
+                color: var(--text);
+                border: 1px solid var(--border);
+            }
+            .swagger-ui .parameter__name,
+            .swagger-ui .parameter__type,
+            .swagger-ui .response-col_status,
+            .swagger-ui .response-col_description {
+                color: var(--text);
+            }
+            .swagger-ui .opblock-description-wrapper,
+            .swagger-ui .opblock-external-docs-wrapper,
+            .swagger-ui .opblock-title_normal {
+                color: var(--muted);
+            }
+            .swagger-ui .scheme-container {
+                background: transparent;
+                box-shadow: none;
+                border: none;
+            }
+            .swagger-ui select {
+                background: #0f172a;
+                color: var(--text);
+                border: 1px solid var(--border);
+            }
+        </style>
+    </head>
+    <body>
+        <div id="swagger-ui"></div>
+        <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+        <script>
+            window.ui = SwaggerUIBundle({
+                url: '/openapi.json',
+                dom_id: '#swagger-ui',
+                deepLinking: true,
+                docExpansion: 'list',
+                filter: true,
+                tryItOutEnabled: true
+            });
+        </script>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html)
 
 @app.get("/settings")
 def get_settings(request: Request, response: FastAPIResponse):
@@ -280,6 +402,14 @@ def settings_ui():
                         <div class='section-title'>Status</div>
                         <div id='current-status' class='status muted'>Checking current status...</div>
                         <div id='enc-status' class='status muted'></div>
+                    </div>
+                    <div class='card'>
+                        <div class='section-title'>Developer</div>
+                        <div class='actions'>
+                            <a class='btn ghost' href='/docs'>API Docs</a>
+                            <a class='btn ghost' href='/health'>Health</a>
+                        </div>
+                        <div class='status muted'>Developer-only endpoints.</div>
                     </div>
                     <div class='card'>
                         <div class='section-title'>AI mode</div>
