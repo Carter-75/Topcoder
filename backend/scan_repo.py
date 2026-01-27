@@ -6,6 +6,7 @@ from typing import Dict, List, Any, Tuple
 import requests
 
 import autofix
+import settings_store
 
 DEFAULT_EXCLUDE_DIRS = {
     ".git",
@@ -58,11 +59,19 @@ def iter_files(root: str, extensions: set[str], exclude_dirs: set[str]) -> List[
     return matches
 
 
-def analyze_batch(api_url: str, files: List[Tuple[str, str]], sector: str, repo_path: str, api_key: str | None) -> Dict[str, Any]:
+def analyze_batch(
+    api_url: str,
+    files: List[Tuple[str, str]],
+    sector: str,
+    repo_path: str,
+    api_key: str | None,
+    require_ai_review: bool | None,
+) -> Dict[str, Any]:
     payload = {
         "files": [{"path": path, "code": code} for path, code in files],
         "sector": sector,
         "repo_path": repo_path,
+        "require_ai_review": require_ai_review,
     }
     headers = {}
     if api_key:
@@ -93,22 +102,49 @@ def main(argv: List[str] | None = None) -> int:
     parser.add_argument("--autofix", action="store_true", help="Apply safe autofixes to local files")
     parser.add_argument("--no-autofix", action="store_true", help="Disable autofix explicitly")
     parser.add_argument("--no-backup", action="store_true", help="Disable autofix backups")
+    parser.add_argument("--no-ai", action="store_true", help="Disable AI review for this run")
     args = parser.parse_args(argv)
 
     repo_path = os.path.abspath(args.repo)
+    api_key = args.api_key.strip()
+    require_ai_review = None
+
+    if args.no_ai:
+        require_ai_review = False
+    elif not api_key and os.isatty(0):
+        try:
+            answer = input("No API key detected. Enter key to enable AI review, or press Enter to run in non-AI mode: ").strip()
+            if answer:
+                api_key = answer
+                settings_store.save_api_key(api_key)
+            else:
+                require_ai_review = False
+        except Exception:
+            require_ai_review = False
+
     if args.autofix:
         autofix_enabled = True
     elif args.no_autofix:
         autofix_enabled = False
     else:
-        if os.isatty(0):
-            try:
-                answer = input("Apply safe autofixes? [y/N]: ").strip().lower()
-                autofix_enabled = answer in {"y", "yes"}
-            except Exception:
+        autofix_enabled = None
+        try:
+            settings_res = requests.get(f"{args.api.rstrip('/')}/settings", timeout=10)
+            if settings_res.ok:
+                data = settings_res.json()
+                if isinstance(data.get("autofix_default"), bool):
+                    autofix_enabled = data["autofix_default"]
+        except Exception:
+            autofix_enabled = None
+        if autofix_enabled is None:
+            if os.isatty(0):
+                try:
+                    answer = input("Apply safe autofixes? [y/N]: ").strip().lower()
+                    autofix_enabled = answer in {"y", "yes"}
+                except Exception:
+                    autofix_enabled = False
+            else:
                 autofix_enabled = False
-        else:
-            autofix_enabled = False
     extensions = {ext.strip().lower() for ext in args.extensions.split(",") if ext.strip()}
     exclude_dirs = {d.strip() for d in args.exclude_dirs.split(",") if d.strip()}
 
@@ -148,7 +184,7 @@ def main(argv: List[str] | None = None) -> int:
             batch.append((rel_path, code))
             batch_paths.append(rel_path)
             if len(batch) >= args.chunk_size:
-                findings = analyze_batch(args.api, batch, args.sector, repo_path, args.api_key or None)
+                findings = analyze_batch(args.api, batch, args.sector, repo_path, api_key or None, require_ai_review)
                 for file_path, file_findings in findings.get("findings", {}).items():
                     results["findings"][file_path] = file_findings
                     results["files_scanned"] += 1
@@ -159,7 +195,7 @@ def main(argv: List[str] | None = None) -> int:
 
     if batch:
         try:
-            findings = analyze_batch(args.api, batch, args.sector, repo_path, args.api_key or None)
+            findings = analyze_batch(args.api, batch, args.sector, repo_path, api_key or None, require_ai_review)
             for file_path, file_findings in findings.get("findings", {}).items():
                 results["findings"][file_path] = file_findings
                 results["files_scanned"] += 1

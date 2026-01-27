@@ -17,13 +17,19 @@ import audit_log
 import config_loader
 import rule_engine
 import guidelines
+import settings_store
+from cryptography.fernet import Fernet
 
 # Import dashboard endpoint
 import dashboard
 
 app = FastAPI(title="Guardrails Backend API")
 JOB_STORE: Dict[str, Dict[str, Any]] = {}
-APP_SETTINGS: Dict[str, Any] = {"openai_api_key": None}
+APP_SETTINGS: Dict[str, Any] = {
+    "openai_api_key": settings_store.load_api_key(),
+    "require_ai_review_default": settings_store.load_require_ai_review_default(),
+    "autofix_default": settings_store.load_autofix_default(),
+}
 
 def _resolve_sector(data: dict, repo_path: str) -> str:
     if data.get("sector"):
@@ -63,6 +69,13 @@ def _require_settings_token(request: Request) -> str | None:
         return None
     return "Missing or invalid settings token."
 
+def _resolve_require_ai_review(data: dict) -> bool:
+    if "require_ai_review" in data and isinstance(data.get("require_ai_review"), bool):
+        return data["require_ai_review"]
+    if isinstance(APP_SETTINGS.get("require_ai_review_default"), bool):
+        return APP_SETTINGS["require_ai_review_default"]
+    return os.environ.get("REQUIRE_AI_REVIEW", "true").lower() == "true"
+
 def _summarize_output(output: dict) -> dict:
     return {
         "policy": output.get("policy"),
@@ -96,11 +109,18 @@ def _enforce_data_residency(repo_path: str) -> str | None:
         return f"Repository requires data residency '{desired}', but server is '{enforced}'."
     return None
 
-def _analyze_code(code: str, sector: str, repo_path: str, policy_override: dict | None = None, ai_key: str | None = None) -> dict:
+def _analyze_code(
+    code: str,
+    sector: str,
+    repo_path: str,
+    policy_override: dict | None = None,
+    ai_key: str | None = None,
+    require_ai_review: bool | None = None,
+) -> dict:
     issues = security_rules.run_security_rules(code)
     coding_issues = coding_standards.run_coding_standards_rules(code)
     license_ip_issues = license_ip.run_license_ip_checks(code)
-    ai_suggestions = ai_review.ai_review(code, api_key_override=ai_key)
+    ai_suggestions = ai_review.ai_review(code, api_key_override=ai_key, require_ai_override=require_ai_review)
     if any(suggestion.get("type") == "ai_review_missing_key" for suggestion in ai_suggestions):
         issues.append({
             "type": "ai_review_missing_key",
@@ -142,10 +162,13 @@ def root():
 
 @app.get("/settings")
 def get_settings():
-    require_ai = os.environ.get("REQUIRE_AI_REVIEW", "true").lower() == "true"
+    require_ai = _resolve_require_ai_review({})
     return {
         "openai_api_key_set": bool(APP_SETTINGS.get("openai_api_key") or os.environ.get("OPENAI_API_KEY")),
         "require_ai_review": require_ai,
+        "require_ai_review_default": APP_SETTINGS.get("require_ai_review_default"),
+        "autofix_default": APP_SETTINGS.get("autofix_default"),
+        "persistent_enabled": bool(os.environ.get("SETTINGS_ENC_KEY")),
     }
 
 @app.get("/settings/ui")
@@ -173,10 +196,28 @@ def settings_ui():
     <body>
         <div class='container'>
             <h1>Guardrails Settings</h1>
-            <p class='muted'>Store your OpenAI API key for all Guardrails scans. If <b>SETTINGS_TOKEN</b> is configured on the server, include it below.</p>
+            <p class='muted'>Store your OpenAI API key for all Guardrails scans. If <b>SETTINGS_TOKEN</b> is configured on the server, include it below. Use the AI mode buttons to require AI or allow non-AI by default.</p>
 
             <div class='card'>
                 <div id='current-status' class='status muted'>Checking current status...</div>
+            </div>
+
+            <div class='card'>
+                <div style='font-weight:600;margin-bottom:0.4rem;'>AI mode</div>
+                <div id='ai-mode-status' class='status muted'>Loading AI mode...</div>
+                <div style='margin-top:0.8rem; display:flex; gap:0.6rem; flex-wrap:wrap;'>
+                    <button id='aiOnBtn' type='button'>Require AI</button>
+                    <button id='aiOffBtn' type='button' style='background:#546e7a;'>Allow non-AI</button>
+                </div>
+            </div>
+
+            <div class='card'>
+                <div style='font-weight:600;margin-bottom:0.4rem;'>Auto-fix default</div>
+                <div id='autofix-status' class='status muted'>Loading auto-fix...</div>
+                <div style='margin-top:0.8rem; display:flex; gap:0.6rem; flex-wrap:wrap;'>
+                    <button id='autofixOnBtn' type='button'>Enable auto-fix</button>
+                    <button id='autofixOffBtn' type='button' style='background:#546e7a;'>Disable auto-fix</button>
+                </div>
             </div>
 
             <label for='apiKey'>OpenAI API Key</label>
@@ -185,14 +226,26 @@ def settings_ui():
             <label for='settingsToken'>Settings Token (optional)</label>
             <input id='settingsToken' type='password' placeholder='Bearer token if required' />
 
-            <button id='saveBtn'>Save Key</button>
+            <div style='margin-top:1.2rem; display:flex; gap:0.6rem; flex-wrap:wrap;'>
+                <button id='saveBtn'>Save Key</button>
+                <button id='genKeyBtn' type='button' style='background:#546e7a;'>Generate Settings Key</button>
+            </div>
             <div id='result' class='status'></div>
+            <div id='genResult' class='status'></div>
         </div>
 
         <script>
             const statusEl = document.getElementById('current-status');
+            const aiModeEl = document.getElementById('ai-mode-status');
+            const autofixEl = document.getElementById('autofix-status');
             const resultEl = document.getElementById('result');
             const saveBtn = document.getElementById('saveBtn');
+            const genResultEl = document.getElementById('genResult');
+            const genKeyBtn = document.getElementById('genKeyBtn');
+            const aiOnBtn = document.getElementById('aiOnBtn');
+            const aiOffBtn = document.getElementById('aiOffBtn');
+            const autofixOnBtn = document.getElementById('autofixOnBtn');
+            const autofixOffBtn = document.getElementById('autofixOffBtn');
 
             async function refreshStatus() {
                 try {
@@ -201,8 +254,20 @@ def settings_ui():
                     statusEl.textContent = data.openai_api_key_set
                         ? 'API key is configured.'
                         : 'API key is not configured.';
+                    aiModeEl.textContent = data.require_ai_review
+                        ? 'AI review is required by default.'
+                        : 'Non-AI mode is allowed by default.';
+                    if (typeof data.autofix_default === 'boolean') {
+                        autofixEl.textContent = data.autofix_default
+                            ? 'Auto-fix is enabled by default.'
+                            : 'Auto-fix is disabled by default.';
+                    } else {
+                        autofixEl.textContent = 'Auto-fix default is not set.';
+                    }
                 } catch (err) {
                     statusEl.textContent = 'Unable to load status.';
+                    aiModeEl.textContent = 'Unable to load AI mode.';
+                    autofixEl.textContent = 'Unable to load auto-fix.';
                 }
             }
 
@@ -242,12 +307,104 @@ def settings_ui():
                 }
             });
 
+            genKeyBtn.addEventListener('click', async () => {
+                genResultEl.textContent = '';
+                genResultEl.className = 'status';
+                const token = document.getElementById('settingsToken').value.trim();
+                genKeyBtn.disabled = true;
+                try {
+                    const res = await fetch('/settings/generate-key', {
+                        method: 'POST',
+                        headers: {
+                            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                        }
+                    });
+                    const data = await res.json();
+                    if (!res.ok) {
+                        throw new Error(data.error || 'Failed to generate key.');
+                    }
+                    genResultEl.textContent = `Generated key: ${data.key}`;
+                    genResultEl.classList.add('success');
+                } catch (err) {
+                    genResultEl.textContent = err.message || 'Failed to generate key.';
+                    genResultEl.classList.add('error');
+                } finally {
+                    genKeyBtn.disabled = false;
+                }
+            });
+
+            async function setAiMode(value) {
+                resultEl.textContent = '';
+                resultEl.className = 'status';
+                const token = document.getElementById('settingsToken').value.trim();
+                try {
+                    const res = await fetch('/settings/ai-mode', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                        },
+                        body: JSON.stringify({ require_ai_review: value })
+                    });
+                    const data = await res.json();
+                    if (!res.ok) {
+                        throw new Error(data.error || 'Failed to update AI mode.');
+                    }
+                    resultEl.textContent = 'AI mode updated.';
+                    resultEl.classList.add('success');
+                    await refreshStatus();
+                } catch (err) {
+                    resultEl.textContent = err.message || 'Failed to update AI mode.';
+                    resultEl.classList.add('error');
+                }
+            }
+
+            aiOnBtn.addEventListener('click', () => setAiMode(true));
+            aiOffBtn.addEventListener('click', () => setAiMode(false));
+
+            async function setAutofixMode(value) {
+                resultEl.textContent = '';
+                resultEl.className = 'status';
+                const token = document.getElementById('settingsToken').value.trim();
+                try {
+                    const res = await fetch('/settings/autofix-mode', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                        },
+                        body: JSON.stringify({ autofix_default: value })
+                    });
+                    const data = await res.json();
+                    if (!res.ok) {
+                        throw new Error(data.error || 'Failed to update auto-fix.');
+                    }
+                    resultEl.textContent = 'Auto-fix updated.';
+                    resultEl.classList.add('success');
+                    await refreshStatus();
+                } catch (err) {
+                    resultEl.textContent = err.message || 'Failed to update auto-fix.';
+                    resultEl.classList.add('error');
+                }
+            }
+
+            autofixOnBtn.addEventListener('click', () => setAutofixMode(true));
+            autofixOffBtn.addEventListener('click', () => setAutofixMode(false));
+
             refreshStatus();
         </script>
     </body>
     </html>
     """
     return HTMLResponse(content=html)
+
+@app.post("/settings/generate-key")
+async def generate_settings_key(request: Request):
+    auth_error = _require_settings_token(request)
+    if auth_error:
+        return JSONResponse({"error": auth_error}, status_code=401)
+    key = Fernet.generate_key().decode("utf-8")
+    return JSONResponse({"key": key})
 
 @app.post("/settings/api-key")
 async def set_api_key(request: Request):
@@ -259,7 +416,52 @@ async def set_api_key(request: Request):
     if not key:
         return JSONResponse({"error": "api_key is required."}, status_code=400)
     APP_SETTINGS["openai_api_key"] = key
-    return JSONResponse({"result": "saved"})
+    persisted = settings_store.save_api_key(key)
+    if not persisted:
+        return JSONResponse({
+            "result": "saved",
+            "persistent": False,
+            "warning": "SETTINGS_ENC_KEY not set; key stored in memory only.",
+        })
+    return JSONResponse({"result": "saved", "persistent": True})
+
+@app.post("/settings/ai-mode")
+async def set_ai_mode(request: Request):
+    auth_error = _require_settings_token(request)
+    if auth_error:
+        return JSONResponse({"error": auth_error}, status_code=401)
+    data = await request.json()
+    value = data.get("require_ai_review")
+    if not isinstance(value, bool):
+        return JSONResponse({"error": "require_ai_review must be a boolean."}, status_code=400)
+    APP_SETTINGS["require_ai_review_default"] = value
+    persisted = settings_store.save_require_ai_review_default(value)
+    if not persisted:
+        return JSONResponse({
+            "result": "saved",
+            "persistent": False,
+            "warning": "SETTINGS_ENC_KEY not set; setting stored in memory only.",
+        })
+    return JSONResponse({"result": "saved", "persistent": True})
+
+@app.post("/settings/autofix-mode")
+async def set_autofix_mode(request: Request):
+    auth_error = _require_settings_token(request)
+    if auth_error:
+        return JSONResponse({"error": auth_error}, status_code=401)
+    data = await request.json()
+    value = data.get("autofix_default")
+    if not isinstance(value, bool):
+        return JSONResponse({"error": "autofix_default must be a boolean."}, status_code=400)
+    APP_SETTINGS["autofix_default"] = value
+    persisted = settings_store.save_autofix_default(value)
+    if not persisted:
+        return JSONResponse({
+            "result": "saved",
+            "persistent": False,
+            "warning": "SETTINGS_ENC_KEY not set; setting stored in memory only.",
+        })
+    return JSONResponse({"result": "saved", "persistent": True})
 
 @app.post("/analyze")
 async def analyze(request: Request):
@@ -272,7 +474,15 @@ async def analyze(request: Request):
     sector = _resolve_sector(data, repo_path)
     policy_override = _resolve_policy_override(data, repo_path)
     ai_key = _get_request_ai_key(request, data)
-    analysis = _analyze_code(code, sector, repo_path, policy_override=policy_override, ai_key=ai_key)
+    require_ai_review = _resolve_require_ai_review(data)
+    analysis = _analyze_code(
+        code,
+        sector,
+        repo_path,
+        policy_override=policy_override,
+        ai_key=ai_key,
+        require_ai_review=require_ai_review,
+    )
     _apply_guidelines(analysis)
     result = {
         "result": "analyzed",
@@ -299,6 +509,7 @@ async def analyze_batch(request: Request):
     sector = _resolve_sector(data, repo_path)
     policy_override = _resolve_policy_override(data, repo_path)
     ai_key = _get_request_ai_key(request, data)
+    require_ai_review = _resolve_require_ai_review(data)
 
     findings = {}
     policy_mode = "advisory"
@@ -306,7 +517,14 @@ async def analyze_batch(request: Request):
     for item in files:
         path = item.get("path", "unknown")
         code = item.get("code", "")
-        analysis = _analyze_code(code, sector, repo_path, policy_override=policy_override, ai_key=ai_key)
+        analysis = _analyze_code(
+            code,
+            sector,
+            repo_path,
+            policy_override=policy_override,
+            ai_key=ai_key,
+            require_ai_review=require_ai_review,
+        )
         _apply_guidelines(analysis)
         findings[path] = {
             "result": "analyzed",
@@ -391,13 +609,21 @@ def _run_async_scan(job_id: str, payload: dict) -> None:
     sector = _resolve_sector(payload, repo_path)
     policy_override = _resolve_policy_override(payload, repo_path)
     ai_key = payload.get("ai_api_key") or APP_SETTINGS.get("openai_api_key") or os.environ.get("OPENAI_API_KEY")
+    require_ai_review = _resolve_require_ai_review(payload)
     findings = {}
     policy_mode = "advisory"
     override_allowed = False
     for item in files:
         path = item.get("path", "unknown")
         code = item.get("code", "")
-        analysis = _analyze_code(code, sector, repo_path, policy_override=policy_override, ai_key=ai_key)
+        analysis = _analyze_code(
+            code,
+            sector,
+            repo_path,
+            policy_override=policy_override,
+            ai_key=ai_key,
+            require_ai_review=require_ai_review,
+        )
         _apply_guidelines(analysis)
         findings[path] = {"result": "analyzed", **analysis}
         if analysis["policy"] == "blocking":

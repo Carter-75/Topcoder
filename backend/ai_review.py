@@ -5,9 +5,17 @@ from typing import List, Dict, Any
 
 import requests
 
-def ai_review(code: str, api_key_override: str | None = None) -> List[Dict[str, Any]]:
+def ai_review(
+    code: str,
+    api_key_override: str | None = None,
+    require_ai_override: bool | None = None,
+) -> List[Dict[str, Any]]:
     api_key = api_key_override or os.environ.get("OPENAI_API_KEY")
     require_ai = os.environ.get("REQUIRE_AI_REVIEW", "true").lower() == "true"
+    if require_ai_override is not None:
+        require_ai = require_ai_override
+    if not require_ai:
+        return []
     if api_key:
         # Use OpenAI API for real AI review
         try:

@@ -47,6 +47,10 @@ Audit logging:
 Data residency:
 - `DATA_RESIDENCY` (optional) — reject requests when repo config requires a different residency
 
+Persistent settings (encrypted):
+- `SETTINGS_ENC_KEY` (required for persistence) — a Fernet key used to encrypt stored settings
+- `SETTINGS_STORE_PATH` (optional) — file path for encrypted storage (default: `settings.enc`)
+
 ## Running the Server
 From the `Topcoder/backend` directory:
 ```sh
@@ -81,6 +85,7 @@ This enables scanning any connected GitHub repo via the app, or calling the API 
 Settings UI:
 - Website (main app): https://topcoder-production.up.railway.app
 - Open `/settings/ui` on the website to store the key in the main app.
+- Auto-fix default and AI mode can be set in the UI and used by the CLI.
 
 ## CLI usage (scan any local repo)
 Use the lightweight CLI wrapper to scan any repo from its root:
@@ -88,11 +93,26 @@ Use the lightweight CLI wrapper to scan any repo from its root:
 - Provide the hosted API URL and API key via flags or environment
 - Default hosted URL is `https://topcoder-production.up.railway.app`
 - Set `GUARDRAILS_API_URL` to override the default and avoid passing `--api` every time
+- Optional `--autofix` applies safe local fixes and stores backups in `.guardrails_backup`
+- If no API key is detected, the CLI prompts for a key or lets you run in non-AI mode
+- Use `--no-ai` to explicitly disable AI review for that run
+- If `SETTINGS_ENC_KEY` is set locally, the CLI saves the entered key to encrypted storage
+
+## CLI settings (no website required)
+You can manage the same settings from the CLI:
+- Generate a server key: `python guardrails.py settings --generate-key`
+- Generate a local key: `python guardrails.py settings --generate-local-key`
+- Set API key: `python guardrails.py settings --set-api-key <key>`
+- Set AI mode: `python guardrails.py settings --ai-mode require|allow`
+- Set auto-fix default: `python guardrails.py settings --autofix-mode on|off`
+
+Optional flags:
+- `--api` to target a different backend URL
+- `--token` if SETTINGS_TOKEN is enabled on the server
 
 ## GitHub App endpoint
 Use the same deployment for the webhook URL:
 - Webhook URL: https://topcoder-production.up.railway.app
-- Optional `--autofix` applies safe local fixes and stores backups in `.guardrails_backup`
 
 ## Scan an entire repository
 From the `Topcoder/backend` directory, run:
