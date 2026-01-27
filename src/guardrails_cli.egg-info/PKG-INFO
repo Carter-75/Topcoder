@@ -1,3 +1,14 @@
+Metadata-Version: 2.4
+Name: guardrails-cli
+Version: 0.1.0
+Summary: Guardrails CLI for scanning repositories
+Author: Carter
+License: MIT
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Requires-Dist: requests
+Requires-Dist: cryptography
+
 # Topcoder Guardrails Backend 
 
 ## Overview
@@ -109,12 +120,6 @@ Install without cloning (PyPI):
 Local install from repo (optional):
 - Run `python install-cli.py` from this repo to add `guardrails` to your PATH
 - After that, run `guardrails scan <repo-path>` from any folder
-
-Publish automation (PyPI):
-- Run `python publish_cli.py` to bump patch version, build, and upload
-- Run `python publish_cli.py --watch` to auto-publish on changes
-Docker auto-publish:
-- Set `PUBLISH_CLI=true` plus `TWINE_USERNAME=__token__` and `TWINE_PASSWORD=<pypi-token>`
 
 ## CLI settings (no website required)
 You can manage the same settings from the CLI:

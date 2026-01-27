@@ -1,0 +1,2 @@
+[console_scripts]
+guardrails = guardrails_cli.cli:main
