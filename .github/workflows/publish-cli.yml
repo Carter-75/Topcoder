@@ -36,21 +36,21 @@ jobs:
               Path("bump.env").write_text("bumped=false\n", encoding="utf-8")
               raise SystemExit(0)
 
-              changed = []
-              event_path = os.environ.get("GITHUB_EVENT_PATH")
-              if event_path and Path(event_path).exists():
-                payload = json.loads(Path(event_path).read_text(encoding="utf-8"))
-                for commit in payload.get("commits", []):
+          changed = []
+          event_path = os.environ.get("GITHUB_EVENT_PATH")
+          if event_path and Path(event_path).exists():
+              payload = json.loads(Path(event_path).read_text(encoding="utf-8"))
+              for commit in payload.get("commits", []):
                   for key in ("added", "modified", "removed"):
-                    changed.extend(commit.get(key, []))
-              if not changed:
-                before = os.environ.get("GITHUB_EVENT_BEFORE")
-                if before and before != "0000000000000000000000000000000000000000":
+                      changed.extend(commit.get(key, []))
+          if not changed:
+              before = os.environ.get("GITHUB_EVENT_BEFORE")
+              if before and before != "0000000000000000000000000000000000000000":
                   diff = run(f"git diff --name-only {before} HEAD")
-                else:
+              else:
                   diff = run("git diff --name-only HEAD^ HEAD")
-                changed = [line for line in diff.splitlines() if line]
-              bump_paths = (
+              changed = [line for line in diff.splitlines() if line]
+          bump_paths = (
               "src/guardrails_cli/",
               "pyproject.toml",
               "README.md",
