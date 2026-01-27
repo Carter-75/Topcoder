@@ -1,5 +1,6 @@
 import argparse
 import os
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -56,8 +57,14 @@ def publish() -> None:
     old_version = _read_version()
     new_version = _bump_patch(old_version)
     _write_version(new_version)
+    dist_path = PROJECT_ROOT / "dist"
+    build_path = PROJECT_ROOT / "build"
+    if dist_path.exists():
+        shutil.rmtree(dist_path)
+    if build_path.exists():
+        shutil.rmtree(build_path)
     _run(["python", "-m", "build"])
-    _run(["python", "-m", "twine", "upload", "dist/*"])
+    _run(["python", "-m", "twine", "upload", "--skip-existing", "dist/*"])
 
 
 def main() -> int:
