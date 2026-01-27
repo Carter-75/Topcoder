@@ -36,7 +36,7 @@ async def analyze(request: Request):
     issues = security_rules.run_security_rules(code)
     coding_issues = coding_standards.run_coding_standards_rules(code)
     license_ip_issues = license_ip.run_license_ip_checks(code)
-    ai_suggestions = ai_review.ai_review_stub(code)
+    ai_suggestions = ai_review.ai_review(code)
     # Apply sector rule pack
     rules = rule_engine.load_rulepack(sector)
     sector_issues = rule_engine.apply_rulepack_rules(code, rules)
