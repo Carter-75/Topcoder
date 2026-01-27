@@ -40,6 +40,11 @@ def dashboard():
     <body>
         <div class="container">
             <h1>Guardrails Audit Dashboard</h1>
+            <div style='margin: 1rem 0 1.5rem 0; display: flex; gap: 0.6rem; flex-wrap: wrap;'>
+                <a href='/settings/ui' style='background:#3949ab;color:#fff;padding:0.6rem 1rem;border-radius:8px;text-decoration:none;'>Settings</a>
+                <a href='/docs' style='background:#5c6bc0;color:#fff;padding:0.6rem 1rem;border-radius:8px;text-decoration:none;'>API Docs</a>
+                <a href='/health' style='background:#7e57c2;color:#fff;padding:0.6rem 1rem;border-radius:8px;text-decoration:none;'>Health</a>
+            </div>
             <p>Total Analyses: <b>{count}</b></p>
             <table>
                 <tr>

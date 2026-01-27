@@ -138,34 +138,7 @@ def health():
 
 @app.get("/")
 def root():
-    html = """
-    <html>
-    <head>
-        <title>Guardrails API</title>
-        <meta name='viewport' content='width=device-width, initial-scale=1'>
-        <style>
-            body { font-family: 'Segoe UI', Arial, sans-serif; background: #f7f9fa; margin: 0; }
-            .container { max-width: 720px; margin: 3rem auto; background: #fff; border-radius: 12px; box-shadow: 0 2px 8px #0001; padding: 2rem; }
-            h1 { color: #1a237e; margin-top: 0; }
-            ul { padding-left: 1.2rem; }
-            a { color: #3949ab; text-decoration: none; }
-        </style>
-    </head>
-    <body>
-        <div class='container'>
-            <h1>Guardrails API</h1>
-            <p>Service is running. Use the links below:</p>
-            <ul>
-                <li><a href='/settings/ui'>Settings UI</a></li>
-                <li><a href='/docs'>API Docs</a></li>
-                <li><a href='/health'>Health Check</a></li>
-                <li><a href='/dashboard'>Audit Dashboard</a></li>
-            </ul>
-        </div>
-    </body>
-    </html>
-    """
-    return HTMLResponse(content=html)
+    return dashboard.dashboard()
 
 @app.get("/settings")
 def get_settings():
