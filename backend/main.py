@@ -1,5 +1,5 @@
 
-from fastapi import FastAPI, Request, BackgroundTasks
+from fastapi import FastAPI, Request, BackgroundTasks, Response as FastAPIResponse
 from fastapi.responses import JSONResponse, HTMLResponse, Response
 import sys
 import os
@@ -18,7 +18,6 @@ import config_loader
 import rule_engine
 import guidelines
 import settings_store
-from cryptography.fernet import Fernet
 
 # Import dashboard endpoint
 import dashboard
@@ -61,7 +60,7 @@ def _get_user_scope_key(request: Request) -> str | None:
     if scope == "ip":
         return request.headers.get("x-guardrails-user") or (request.client.host if request.client else None)
     if scope == "user":
-        return request.headers.get("x-guardrails-user")
+        return request.headers.get("x-guardrails-user") or request.cookies.get("guardrails_user")
     return None
 
 
@@ -189,14 +188,17 @@ def favicon():
     return Response(status_code=204)
 
 @app.get("/settings")
-def get_settings(request: Request):
+def get_settings(request: Request, response: FastAPIResponse):
     user_key = _get_user_scope_key(request)
+    if os.environ.get("SETTINGS_SCOPE", "global").lower() == "user" and not user_key:
+        user_key = uuid.uuid4().hex
+        response.set_cookie("guardrails_user", user_key, httponly=False, samesite="Lax")
     require_ai = _resolve_require_ai_review({}, request=request)
     stored_key = settings_store.load_api_key(user_key)
     stored_ai = settings_store.load_require_ai_review_default(user_key)
     stored_autofix = settings_store.load_autofix_default(user_key)
     return {
-        "openai_api_key_set": bool(stored_key or (_is_global_scope() and (APP_SETTINGS.get("openai_api_key") or os.environ.get("OPENAI_API_KEY")))),
+        "openai_api_key_set": bool(stored_key) if not _is_global_scope() else bool(stored_key or APP_SETTINGS.get("openai_api_key") or os.environ.get("OPENAI_API_KEY")),
         "require_ai_review": require_ai,
         "require_ai_review_default": stored_ai,
         "autofix_default": stored_autofix,
@@ -204,6 +206,12 @@ def get_settings(request: Request):
         "settings_scope": os.environ.get("SETTINGS_SCOPE", "global"),
         "user_key_present": bool(user_key),
     }
+
+@app.post("/settings/token")
+def issue_user_token(response: FastAPIResponse):
+    user_key = uuid.uuid4().hex
+    response.set_cookie("guardrails_user", user_key, httponly=False, samesite="Lax")
+    return {"user_token": user_key}
 
 @app.get("/settings/ui")
 def settings_ui():
@@ -264,12 +272,13 @@ def settings_ui():
         <div class='container'>
             <div class='panel'>
                 <h1>Guardrails Settings</h1>
-                <p class='muted'>Per-user settings for API key, AI mode, and auto-fix. When <b>SETTINGS_SCOPE=user</b> is enabled, settings are scoped to your user token.</p>
+                <p class='muted'>Per-user settings for API key, AI mode, and auto-fix. When <b>SETTINGS_SCOPE=user</b> is enabled, a user token is created automatically and stored for you.</p>
 
                 <div class='grid'>
                     <div class='card'>
                         <div class='section-title'>Status</div>
                         <div id='current-status' class='status muted'>Checking current status...</div>
+                        <div id='enc-status' class='status muted'></div>
                     </div>
                     <div class='card'>
                         <div class='section-title'>AI mode</div>
@@ -295,60 +304,51 @@ def settings_ui():
                 <label for='settingsToken'>Settings Token (optional)</label>
                 <input id='settingsToken' type='password' placeholder='Bearer token if required' />
 
-                <label for='userToken'>User Token (for user-scoped settings)</label>
-                <input id='userToken' type='text' placeholder='Auto-generated and stored locally' />
 
                 <div class='actions'>
                     <button id='saveBtn' class='btn'>Save Key</button>
-                    <button id='genKeyBtn' type='button' class='btn ghost'>Generate Settings Key</button>
-                    <button id='genUserBtn' type='button' class='btn alt'>Generate User Token</button>
-                    <button id='setUserBtn' type='button' class='btn secondary'>Use User Token</button>
                 </div>
                 <div id='result' class='status'></div>
-                <div id='genResult' class='status'></div>
             </div>
         </div>
 
         <script>
             const statusEl = document.getElementById('current-status');
+            const encStatusEl = document.getElementById('enc-status');
             const aiModeEl = document.getElementById('ai-mode-status');
             const autofixEl = document.getElementById('autofix-status');
             const resultEl = document.getElementById('result');
             const saveBtn = document.getElementById('saveBtn');
-            const genResultEl = document.getElementById('genResult');
-            const genKeyBtn = document.getElementById('genKeyBtn');
             const aiOnBtn = document.getElementById('aiOnBtn');
             const aiOffBtn = document.getElementById('aiOffBtn');
             const autofixOnBtn = document.getElementById('autofixOnBtn');
             const autofixOffBtn = document.getElementById('autofixOffBtn');
-            const userTokenInput = document.getElementById('userToken');
-            const genUserBtn = document.getElementById('genUserBtn');
-            const setUserBtn = document.getElementById('setUserBtn');
-
             function getUserToken() {
-                return userTokenInput.value.trim();
+                const stored = localStorage.getItem('guardrails_user_token');
+                return stored ? stored.trim() : '';
             }
 
-            function ensureUserToken() {
+            async function ensureUserToken() {
                 const stored = localStorage.getItem('guardrails_user_token');
                 if (stored) {
-                    userTokenInput.value = stored;
                     return stored;
+                }
+                try {
+                    const res = await fetch('/settings/token');
+                    const data = await res.json();
+                    if (data.user_token) {
+                        localStorage.setItem('guardrails_user_token', data.user_token);
+                        return data.user_token;
+                    }
+                } catch (err) {
+                    // fall back to local token
                 }
                 const array = new Uint8Array(16);
                 crypto.getRandomValues(array);
                 const token = Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('');
                 localStorage.setItem('guardrails_user_token', token);
-                userTokenInput.value = token;
                 return token;
             }
-
-            userTokenInput.addEventListener('change', () => {
-                const token = getUserToken();
-                if (token) {
-                    localStorage.setItem('guardrails_user_token', token);
-                }
-            });
 
             async function refreshStatus() {
                 try {
@@ -361,16 +361,31 @@ def settings_ui():
                     statusEl.textContent = data.openai_api_key_set
                         ? 'API key is configured.'
                         : 'API key is not configured.';
+                    if (!data.persistent_enabled) {
+                        encStatusEl.textContent = 'Persistence is off. Set SETTINGS_ENC_KEY to keep settings across restarts.';
+                        encStatusEl.className = 'status error';
+                    } else {
+                        encStatusEl.textContent = 'Persistence is enabled.';
+                        encStatusEl.className = 'status success';
+                    }
                     if (data.settings_scope === 'user') {
                         statusEl.textContent += data.user_key_present ? ' (User scoped)' : ' (User scoped: missing token)';
                     }
-                    aiModeEl.textContent = data.require_ai_review
-                        ? 'AI review is required by default.'
-                        : 'Non-AI mode is allowed by default.';
-                    aiOnBtn.classList.toggle('selected', !!data.require_ai_review);
-                    aiOffBtn.classList.toggle('selected', !data.require_ai_review);
-                    aiOnBtn.setAttribute('aria-pressed', data.require_ai_review ? 'true' : 'false');
-                    aiOffBtn.setAttribute('aria-pressed', data.require_ai_review ? 'false' : 'true');
+                    if (typeof data.require_ai_review_default === 'boolean') {
+                        aiModeEl.textContent = data.require_ai_review
+                            ? 'AI review is required by default.'
+                            : 'Non-AI mode is allowed by default.';
+                        aiOnBtn.classList.toggle('selected', !!data.require_ai_review);
+                        aiOffBtn.classList.toggle('selected', !data.require_ai_review);
+                        aiOnBtn.setAttribute('aria-pressed', data.require_ai_review ? 'true' : 'false');
+                        aiOffBtn.setAttribute('aria-pressed', data.require_ai_review ? 'false' : 'true');
+                    } else {
+                        aiModeEl.textContent = 'AI mode default is not set.';
+                        aiOnBtn.classList.remove('selected');
+                        aiOffBtn.classList.remove('selected');
+                        aiOnBtn.setAttribute('aria-pressed', 'false');
+                        aiOffBtn.setAttribute('aria-pressed', 'false');
+                    }
                     if (typeof data.autofix_default === 'boolean') {
                         autofixEl.textContent = data.autofix_default
                             ? 'Auto-fix is enabled by default.'
@@ -427,33 +442,6 @@ def settings_ui():
                     resultEl.classList.add('error');
                 } finally {
                     saveBtn.disabled = false;
-                }
-            });
-
-            genKeyBtn.addEventListener('click', async () => {
-                genResultEl.textContent = '';
-                genResultEl.className = 'status';
-                const token = document.getElementById('settingsToken').value.trim();
-                genKeyBtn.disabled = true;
-                try {
-                    const res = await fetch('/settings/generate-key', {
-                        method: 'POST',
-                        headers: {
-                            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-                            ...(getUserToken() ? { 'X-Guardrails-User': getUserToken() } : {})
-                        }
-                    });
-                    const data = await res.json();
-                    if (!res.ok) {
-                        throw new Error(data.error || 'Failed to generate key.');
-                    }
-                    genResultEl.textContent = `Generated key: ${data.key}`;
-                    genResultEl.classList.add('success');
-                } catch (err) {
-                    genResultEl.textContent = err.message || 'Failed to generate key.';
-                    genResultEl.classList.add('error');
-                } finally {
-                    genKeyBtn.disabled = false;
                 }
             });
 
@@ -521,41 +509,12 @@ def settings_ui():
             autofixOnBtn.addEventListener('click', () => setAutofixMode(true));
             autofixOffBtn.addEventListener('click', () => setAutofixMode(false));
 
-            genUserBtn.addEventListener('click', () => {
-                const token = ensureUserToken();
-                resultEl.textContent = `User token set: ${token}`;
-                resultEl.classList.add('success');
-                refreshStatus();
-            });
-
-            setUserBtn.addEventListener('click', () => {
-                const token = getUserToken();
-                if (!token) {
-                    resultEl.textContent = 'User token is required.';
-                    resultEl.classList.add('error');
-                    return;
-                }
-                localStorage.setItem('guardrails_user_token', token);
-                resultEl.textContent = `User token set: ${token}`;
-                resultEl.classList.add('success');
-                refreshStatus();
-            });
-
-            ensureUserToken();
-            refreshStatus();
+            ensureUserToken().then(refreshStatus);
         </script>
     </body>
     </html>
     """
     return HTMLResponse(content=html)
-
-@app.post("/settings/generate-key")
-async def generate_settings_key(request: Request):
-    auth_error = _require_settings_token(request)
-    if auth_error:
-        return JSONResponse({"error": auth_error}, status_code=401)
-    key = Fernet.generate_key().decode("utf-8")
-    return JSONResponse({"key": key})
 
 @app.post("/settings/api-key")
 async def set_api_key(request: Request):

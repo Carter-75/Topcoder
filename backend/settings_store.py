@@ -4,6 +4,8 @@ from typing import Optional, Dict, Any
 
 from cryptography.fernet import Fernet, InvalidToken
 
+_MEMORY_SETTINGS: Dict[str, Any] = {}
+
 
 def _get_fernet() -> Optional[Fernet]:
     key = os.environ.get("SETTINGS_ENC_KEY")
@@ -16,7 +18,7 @@ def load_settings() -> Dict[str, Any]:
     store_path = os.environ.get("SETTINGS_STORE_PATH", "settings.enc")
     fernet = _get_fernet()
     if not fernet:
-        return {}
+        return dict(_MEMORY_SETTINGS)
     if not os.path.exists(store_path):
         return {}
     try:
@@ -38,7 +40,9 @@ def save_settings(settings: Dict[str, Any]) -> bool:
     store_path = os.environ.get("SETTINGS_STORE_PATH", "settings.enc")
     fernet = _get_fernet()
     if not fernet:
-        return False
+        _MEMORY_SETTINGS.clear()
+        _MEMORY_SETTINGS.update(settings)
+        return True
     payload = json.dumps(settings).encode("utf-8")
     encrypted = fernet.encrypt(payload)
     with open(store_path, "wb") as f:

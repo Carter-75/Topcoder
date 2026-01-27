@@ -71,7 +71,20 @@ Environment variables:
 The app reads `.guardrails/config.yml|yaml|json` from the repo when available to apply `sector` and `policy` overrides.
 
 ## Hosted usage (no repo cloning)
-If you deploy the backend as a hosted service, users can supply their own OpenAI key without cloning or installing anything.
+If you deploy the backend as a hosted service, people can use it in two simple ways:
+
+### 1) Website-only (no CLI)
+1) Go to the website: https://topcoder-production.up.railway.app
+2) Open `/settings/ui`.
+3) Paste your OpenAI API key and click “Save Key”.
+4) Choose AI mode and Auto-fix defaults.
+5) Use the GitHub App integration (if installed) or call the API directly.
+
+### 2) Install CLI and scan locally (most common)
+1) `pip install guardrails-cli`
+2) (First time only) Open `/settings/ui` on the website and save your API key.
+3) Copy `guardrails_user_token` from your browser’s local storage.
+4) From any repo: `guardrails scan . --user <token>`
 
 Per-user flow (required when `SETTINGS_SCOPE=user`):
 - The UI generates a **User Token** and stores it locally in the browser
@@ -82,41 +95,15 @@ Optional protection:
 
 This enables scanning any connected GitHub repo via the app, or calling the API directly from external tools.
 
-Settings UI:
-- Website (main app): https://topcoder-production.up.railway.app
-- Open `/settings/ui` on the website to store the key in the main app.
-- Auto-fix default and AI mode can be set in the UI and used by the CLI.
-- When `SETTINGS_SCOPE=user`, the UI generates a per-user token and stores it locally.
-- You can also paste an existing token (from CLI) and click “Use User Token”.
-
-Step-by-step (UI only):
-1) Open `/settings/ui`.
-2) Click “Generate User Token” (or paste one and click “Use User Token”).
-3) Paste your OpenAI API key and click “Save Key”.
-4) Choose AI mode and Auto-fix defaults.
-5) Use the CLI with the same token to scan any repo.
-
 ## CLI usage (scan any local repo)
-Use the lightweight CLI wrapper to scan any repo from its root:
-- Run the CLI in this repo via `python guardrails.py scan <repo-path>`
-- Provide the hosted API URL and API key via flags or environment
+Use the CLI wrapper to scan any repo from its root:
+- Install: `pip install guardrails-cli`
+- Run: `guardrails scan <repo-path> --user <token>`
 - Default hosted URL is `https://topcoder-production.up.railway.app`
 - Set `GUARDRAILS_API_URL` to override the default and avoid passing `--api` every time
 - Optional `--autofix` applies safe local fixes and stores backups in `.guardrails_backup`
-- If no API key is detected, the CLI prompts for a key or lets you run in non-AI mode
 - Use `--no-ai` to explicitly disable AI review for that run
-- If `SETTINGS_ENC_KEY` is set locally, the CLI saves the entered key to encrypted storage
 - For `SETTINGS_SCOPE=user`, pass `--user <token>` or set `GUARDRAILS_USER` to match the UI token
-- If no token is provided, the CLI prompts to paste one or generates a new token
-
-Install without cloning (PyPI):
-- `pip install guardrails-cli`
-- Then run `guardrails scan <repo-path>` from any folder
-
-Quick start (CLI):
-1) `pip install guardrails-cli`
-2) `guardrails scan . --user <token>`
-3) When prompted, paste the token from the UI (or press Enter to generate a new one)
 
 Local install from repo (optional):
 - Run `python install-cli.py` from this repo to add `guardrails` to your PATH
@@ -130,7 +117,6 @@ Docker auto-publish:
 
 ## CLI settings (no website required)
 You can manage the same settings from the CLI:
-- Generate a server key: `python guardrails.py settings --generate-key`
 - Generate a local key: `python guardrails.py settings --generate-local-key`
 - Set API key: `python guardrails.py settings --set-api-key <key>`
 - Set AI mode: `python guardrails.py settings --ai-mode require|allow`
@@ -177,7 +163,7 @@ pytest
 ```
 
 Manual end-to-end usage (what you actually do):
-1) Open `/settings/ui` and generate a User Token (required when `SETTINGS_SCOPE=user`).
+1) Open `/settings/ui` (a user token is created automatically when `SETTINGS_SCOPE=user`).
 2) Paste your OpenAI API key and set AI/Auto-fix defaults.
 3) From any repo, run `guardrails scan . --user <token>`.
 4) Confirm the scan results in `scan_results.json` and audit entries in the dashboard.

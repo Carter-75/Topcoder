@@ -35,7 +35,6 @@ def main() -> int:
     settings.add_argument("--set-api-key", default="", help="Set API key in hosted settings")
     settings.add_argument("--ai-mode", choices=["require", "allow"], help="Set default AI mode (require or allow non-AI)")
     settings.add_argument("--autofix-mode", choices=["on", "off"], help="Set default auto-fix mode")
-    settings.add_argument("--generate-key", action="store_true", help="Generate a settings encryption key on the server")
     settings.add_argument("--generate-local-key", action="store_true", help="Generate a local settings encryption key")
     settings.add_argument("--verify", action="store_true", help="Verify settings sync with the server")
 
@@ -80,12 +79,6 @@ def main() -> int:
         api_base = args.api.rstrip("/")
         if args.generate_local_key:
             print(Fernet.generate_key().decode("utf-8"))
-            return 0
-        if args.generate_key:
-            res = requests.post(f"{api_base}/settings/generate-key", headers=headers, timeout=15)
-            res.raise_for_status()
-            data = res.json()
-            print(data.get("key", ""))
             return 0
         if args.set_api_key:
             res = requests.post(
