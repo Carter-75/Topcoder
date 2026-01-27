@@ -1,0 +1,9 @@
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "volumes": [
+    {
+      "name": "guardrails-data",
+      "mountPath": "/app"
+    }
+  ]
+}

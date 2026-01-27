@@ -1,6 +1,8 @@
 import re
 from typing import List, Dict, Any
 
+import config_loader
+
 def check_naming_conventions(code: str) -> List[Dict[str, Any]]:
     # Simple check: function names should be snake_case (Python)
     issues = []
@@ -48,9 +50,44 @@ def check_error_handling(code: str) -> List[Dict[str, Any]]:
         })
     return issues
 
-def run_coding_standards_rules(code: str) -> List[Dict[str, Any]]:
+def _load_custom_coding_rules(repo_path: str) -> List[Dict[str, Any]]:
+    config = config_loader.load_config(repo_path)
+    rules = config.get("coding_standards", [])
+    return rules if isinstance(rules, list) else []
+
+def _apply_custom_coding_rules(code: str, rules: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    issues: List[Dict[str, Any]] = []
+    for rule in rules:
+        pattern = rule.get("pattern")
+        if not pattern:
+            continue
+        patterns = pattern if isinstance(pattern, list) else [pattern]
+        for pat in patterns:
+            for m in re.finditer(pat, code, re.MULTILINE):
+                issues.append({
+                    "type": rule.get("type", "coding_standard"),
+                    "message": rule.get("message", "Coding standard violation."),
+                    "suggestion": rule.get("suggestion"),
+                    "start": m.start(),
+                    "end": m.end(),
+                    "severity": rule.get("severity", "warning"),
+                    "rule_id": rule.get("id"),
+                })
+    return issues
+
+def run_coding_standards_rules(code: str, repo_path: str = ".") -> List[Dict[str, Any]]:
     issues = []
-    issues.extend(check_naming_conventions(code))
-    issues.extend(check_logging_practices(code))
-    issues.extend(check_error_handling(code))
+    config = config_loader.load_config(repo_path)
+    builtins = config.get("coding_standards_builtin", {
+        "naming": True,
+        "logging": True,
+        "error_handling": True,
+    })
+    if builtins.get("naming", True):
+        issues.extend(check_naming_conventions(code))
+    if builtins.get("logging", True):
+        issues.extend(check_logging_practices(code))
+    if builtins.get("error_handling", True):
+        issues.extend(check_error_handling(code))
+    issues.extend(_apply_custom_coding_rules(code, _load_custom_coding_rules(repo_path)))
     return issues

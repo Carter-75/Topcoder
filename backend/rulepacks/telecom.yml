@@ -1,0 +1,23 @@
+rules:
+  - id: telecom-no-plaintext-pii
+    type: pii_handling
+    severity: warning
+    message: "Possible plaintext PII handling detected."
+    pattern:
+      - "(?i)ssn"
+      - "(?i)customer_id"
+      - "(?i)subscriber"
+  - id: telecom-no-hardcoded-endpoints
+    type: insecure_config
+    severity: warning
+    message: "Hardcoded telecom service endpoint detected."
+    pattern:
+      - "(?i)ims\."
+      - "(?i)5g"
+      - "(?i)lte"
+  - id: telecom-logging
+    type: logging_practice
+    severity: advisory
+    message: "Ensure sensitive telecom identifiers are not logged."
+    pattern:
+      - "(?i)log.*(imei|imsi)"

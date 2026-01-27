@@ -26,11 +26,18 @@ def ai_review(
             data = {
                 "model": "gpt-4",
                 "messages": [
-                    {"role": "system", "content": "You are a secure code reviewer. Analyze the following code for security, performance, and maintainability. List issues, explanations, and suggestions as JSON."},
-                    {"role": "user", "content": code}
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are a secure code reviewer. Return a JSON array of findings. "
+                            "Each finding must include: type, category, severity (advisory|warning|blocking), "
+                            "message, explanation, suggestion, and references (array of URLs)."
+                        ),
+                    },
+                    {"role": "user", "content": code},
                 ],
-                "max_tokens": 512,
-                "temperature": 0.2
+                "max_tokens": 800,
+                "temperature": 0.2,
             }
             resp = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=data, timeout=20)
             resp.raise_for_status()
@@ -44,8 +51,14 @@ def ai_review(
                 if isinstance(suggestions, list):
                     return suggestions
             except Exception:
-                # Fallback: return as a single suggestion
-                return [{"type": "ai_review", "message": content, "severity": "advisory"}]
+                return [{
+                    "type": "ai_review",
+                    "category": "maintainability",
+                    "message": "AI review returned an unstructured response.",
+                    "explanation": content,
+                    "suggestion": "Review the content manually and apply relevant fixes.",
+                    "severity": "advisory",
+                }]
         except Exception as e:
             return [{"type": "ai_review_error", "message": str(e), "severity": "warning"}]
     if require_ai:

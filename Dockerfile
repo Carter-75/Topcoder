@@ -17,7 +17,6 @@ ENV PORT=8000 \
 	SETTINGS_SCOPE=user \
 	SETTINGS_STORE_PATH=settings.enc \
 	REQUIRE_AI_REVIEW_DEFAULT=false
-VOLUME ["/app"]
 EXPOSE 8000
 
 ENTRYPOINT ["/app/entrypoint.sh"]

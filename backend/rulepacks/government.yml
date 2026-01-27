@@ -1,0 +1,22 @@
+rules:
+  - id: gov-no-secrets
+    type: hardcoded_secret
+    severity: blocking
+    message: "Hardcoded secrets are not permitted for government workloads."
+    pattern:
+      - "(?i)api[_-]?key\s*[:=]"
+      - "(?i)secret\s*[:=]"
+  - id: gov-encryption-required
+    type: insecure_crypto
+    severity: warning
+    message: "Weak cryptography detected. Use approved algorithms."
+    pattern:
+      - "(?i)md5\("
+      - "(?i)sha1\("
+  - id: gov-audit-logging
+    type: logging_practice
+    severity: advisory
+    message: "Ensure audit logging for access and changes."
+    pattern:
+      - "(?i)audit"
+      - "(?i)access log"

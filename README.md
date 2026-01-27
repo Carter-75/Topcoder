@@ -46,6 +46,18 @@ FastAPI-based service that analyzes code, applies policy/rulepacks, and reports 
 - Supports rulepacks and repo-level overrides.
 - Integrates with a GitHub App for PR and push scans.
 
+## Challenge requirement coverage
+- Secure coding guardrails with OWASP/CWE mappings.
+- Copilot-aware flagging and stricter handling for AI-generated code.
+- Configurable coding standards (YAML/JSON in repo config).
+- AI-assisted review with explainable findings.
+- License/IP checks with restricted license detection.
+- Policy-based enforcement (advisory/warning/blocking) with override label.
+- PR/commit scanning via GitHub App with inline comments and summaries.
+- Traceability with audit IDs, export, and resolution events.
+- Async scan flow for large PRs.
+- Pluggable rulepacks per industry (finance, healthcare, public sector, telecom, government).
+
 ## How people use it
 Website-only:
 1) Open `/settings/ui` on your deployment.
@@ -150,9 +162,11 @@ python guardrails.py settings --verify
 - POST /scan/async
 - GET /scan/status/{job_id}
 - GET /report/summary
+- GET /report/trends
 - GET /rulepacks
 - POST /rulepacks
 - GET /audit/export
+- POST /audit/resolve
 - GET /docs
 
 ## Testing

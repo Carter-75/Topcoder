@@ -139,10 +139,11 @@ def _analyze_code(
     policy_override: dict | None = None,
     ai_key: str | None = None,
     require_ai_review: bool | None = None,
+    ai_generated: bool = False,
 ) -> dict:
-    issues = security_rules.run_security_rules(code)
-    coding_issues = coding_standards.run_coding_standards_rules(code)
-    license_ip_issues = license_ip.run_license_ip_checks(code)
+    issues = security_rules.run_security_rules(code, ai_generated=ai_generated)
+    coding_issues = coding_standards.run_coding_standards_rules(code, repo_path=repo_path)
+    license_ip_issues = license_ip.run_license_ip_checks(code, repo_path=repo_path)
     ai_suggestions = ai_review.ai_review(code, api_key_override=ai_key, require_ai_override=require_ai_review)
     if any(suggestion.get("type") == "ai_review_missing_key" for suggestion in ai_suggestions):
         issues.append({
@@ -605,20 +606,27 @@ async def analyze(request: Request):
         policy_override=policy_override,
         ai_key=ai_key,
         require_ai_review=require_ai_review,
+        ai_generated=bool(data.get("ai_generated")),
     )
     _apply_guidelines(analysis)
+    request_id = str(uuid.uuid4())
     result = {
         "result": "analyzed",
+        "request_id": request_id,
         **analysis,
     }
     # Write audit log
     audit_entry = {
+        "request_id": request_id,
         "input": _sanitize_audit_input(data),
         "output": result if audit_log.AUDIT_LOG_STORE_OUTPUT else _summarize_output(result),
         "policy": analysis["policy"],
         "override_allowed": analysis["override_allowed"],
+        "resolution": "unresolved",
     }
-    audit_log.write_audit_log(audit_entry)
+    audit_id = audit_log.write_audit_log(audit_entry)
+    if audit_id:
+        result["audit_id"] = audit_id
     return JSONResponse(result)
 
 @app.post("/analyze-batch")
@@ -649,6 +657,7 @@ async def analyze_batch(request: Request):
             policy_override=policy_override,
             ai_key=ai_key,
             require_ai_review=require_ai_review,
+            ai_generated=bool(data.get("ai_generated")),
         )
         _apply_guidelines(analysis)
         findings[path] = {
@@ -661,20 +670,26 @@ async def analyze_batch(request: Request):
             policy_mode = "warning"
         override_allowed = override_allowed or analysis["override_allowed"]
 
+    request_id = str(uuid.uuid4())
     result = {
         "result": "analyzed",
+        "request_id": request_id,
         "files_scanned": len(files),
         "findings": findings,
         "policy": policy_mode,
         "override_allowed": override_allowed,
     }
     audit_entry = {
+        "request_id": request_id,
         "input": _sanitize_audit_input(data),
         "output": result if audit_log.AUDIT_LOG_STORE_OUTPUT else _summarize_output(result),
         "policy": policy_mode,
         "override_allowed": override_allowed,
+        "resolution": "unresolved",
     }
-    audit_log.write_audit_log(audit_entry)
+    audit_id = audit_log.write_audit_log(audit_entry)
+    if audit_id:
+        result["audit_id"] = audit_id
     return JSONResponse(result)
 
 @app.get("/report/summary")
@@ -696,6 +711,19 @@ def report_summary():
         summary["issue_counts"]["sector"] += len(output.get("sector_issues", []))
         summary["issue_counts"]["ai"] += len(output.get("ai_suggestions", []))
     return JSONResponse(summary)
+
+@app.get("/report/trends")
+def report_trends():
+    entries = audit_log.export_audit_log()
+    trends: Dict[str, Any] = {}
+    for entry in entries:
+        ts = entry.get("timestamp", "")
+        day = ts[:10] if ts else "unknown"
+        bucket = trends.setdefault(day, {"advisory": 0, "warning": 0, "blocking": 0})
+        policy_mode = entry.get("policy", "advisory")
+        if policy_mode in bucket:
+            bucket[policy_mode] += 1
+    return JSONResponse({"trends": trends})
 
 @app.get("/rulepacks")
 def list_rulepacks():
@@ -727,6 +755,17 @@ async def upload_rulepack(request: Request):
 def export_audit():
     return JSONResponse({"entries": audit_log.export_audit_log()})
 
+@app.post("/audit/resolve")
+async def resolve_audit(request: Request):
+    data = await request.json()
+    audit_id = data.get("audit_id")
+    resolution = data.get("resolution")
+    actor = data.get("actor")
+    if not audit_id or not resolution:
+        return JSONResponse({"error": "audit_id and resolution are required."}, status_code=400)
+    audit_log.write_resolution(audit_id, resolution, actor=actor)
+    return JSONResponse({"result": "recorded", "audit_id": audit_id, "resolution": resolution})
+
 def _run_async_scan(job_id: str, payload: dict) -> None:
     JOB_STORE[job_id]["status"] = "running"
     files = payload.get("files", [])
@@ -748,6 +787,7 @@ def _run_async_scan(job_id: str, payload: dict) -> None:
             policy_override=policy_override,
             ai_key=ai_key,
             require_ai_review=require_ai_review,
+            ai_generated=bool(payload.get("ai_generated")),
         )
         _apply_guidelines(analysis)
         findings[path] = {"result": "analyzed", **analysis}

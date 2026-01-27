@@ -100,6 +100,18 @@ const summarizeFindings = (result: AnalyzeBatchResponse) => {
   return { issues, coding, license, sector, ai };
 };
 
+const collectAiHighlights = (result: AnalyzeBatchResponse, limit = 6) => {
+  const highlights: Array<string> = [];
+  for (const file of Object.values(result.findings)) {
+    for (const suggestion of file.ai_suggestions || []) {
+      const text = suggestion.message || suggestion.type || "AI suggestion";
+      highlights.push(text);
+      if (highlights.length >= limit) return highlights;
+    }
+  }
+  return highlights;
+};
+
 const buildLineIndex = (code: string) => {
   const lineStarts = [0];
   for (let i = 0; i < code.length; i += 1) {
@@ -152,6 +164,7 @@ const buildAnnotations = (result: AnalyzeBatchResponse, fileCode: Record<string,
       if (issue.suggestion) messageParts.push(`Suggestion: ${issue.suggestion}`);
       if (issue.owasp) messageParts.push(`OWASP: ${issue.owasp}`);
       if (issue.cwe) messageParts.push(`CWE: ${issue.cwe}`);
+      if (issue.guideline_url) messageParts.push(`Guideline: ${issue.guideline_url}`);
       annotations.push({
         path,
         start_line: line,
@@ -222,6 +235,7 @@ const buildReviewComments = (
       if (issue.suggestion) messageParts.push(`Suggestion: ${issue.suggestion}`);
       if (issue.owasp) messageParts.push(`OWASP: ${issue.owasp}`);
       if (issue.cwe) messageParts.push(`CWE: ${issue.cwe}`);
+      if (issue.guideline_url) messageParts.push(`Guideline: ${issue.guideline_url}`);
       const body = `${messageParts.join("\n")}\n${REVIEW_MARKER}`;
       const key = `${path}:${line}:${body}`;
       if (existingKeys.has(key)) continue;
@@ -371,12 +385,15 @@ export = (app: Probot) => {
       `Sector issues: ${sectorIssues}`,
       `AI suggestions: ${ai}`,
     ];
+    const aiHighlights = collectAiHighlights(result);
 
     await context.octokit.issues.createComment({
       owner,
       repo: repoName,
       issue_number: pr.number,
-      body: `## Guardrails Report\n${summaryLines.map((line) => `- ${line}`).join("\n")}`,
+      body: `## Guardrails Report\n${summaryLines.map((line) => `- ${line}`).join("\n")}${
+        aiHighlights.length ? `\n\n### AI review highlights\n${aiHighlights.map((item) => `- ${item}`).join("\n")}` : ""
+      }`,
     });
 
     if (reviewComments.length > 0) {
