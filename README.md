@@ -35,149 +35,128 @@ This app is **per-user**, not global. Settings are scoped by user token when `SE
 
 Local-only (optional):
 - Set `OPENAI_API_KEY` only if you are running locally and want AI review without using the settings UI/CLI.
-- Optional: set `REQUIRE_AI_REVIEW=false` for local/dev to allow non-AI runs.
+# Guardrails Backend
 
-Audit logging:
-- `AUDIT_LOG_ENABLED` (default: true)
-- `AUDIT_LOG_PATH` (default: audit_log.jsonl)
-- `AUDIT_LOG_STORE_OUTPUT` (default: true) — store full results in audit log
+FastAPI-based service that analyzes code, applies policy/rulepacks, and reports results for PRs, commits, and local scans. It ships with a settings UI, audit logging, and a lightweight CLI for scanning any repository.
 
-Data residency:
-- `DATA_RESIDENCY` (optional) — reject requests when repo config requires a different residency
+## What it does
+- Analyzes code via REST endpoints and returns structured findings.
+- Enforces security, coding standards, license/IP, sector rules, and AI review policy.
+- Stores audit logs and provides summaries.
+- Supports rulepacks and repo-level overrides.
+- Integrates with a GitHub App for PR and push scans.
 
-Persistent settings (encrypted):
-- `SETTINGS_ENC_KEY` (required for persistence) — a Fernet key used to encrypt stored settings
-- `SETTINGS_STORE_PATH` (optional) — file path for encrypted storage (default: `settings.enc`)
-- `SETTINGS_SCOPE` (recommended: `user`) — `user` keeps settings per user token
-- `REQUIRE_AI_REVIEW_DEFAULT` (optional) — default AI mode when user settings are not set (default: false)
+## How people use it
+Website-only:
+1) Open `/settings/ui` on your deployment.
+2) Save your OpenAI API key.
+3) Set AI mode and auto-fix defaults.
+4) Use the GitHub App integration or call the API directly.
 
-## Running the Server
-From the `Topcoder/backend` directory:
+CLI (most common):
+1) `pip install guardrails-cli`
+2) Open `/settings/ui` once and save your API key.
+3) Copy `guardrails_user_token` from browser local storage if `SETTINGS_SCOPE=user`.
+4) `guardrails scan <repo-path> --user <token>`
+
+## Project layout
+- backend/ — FastAPI service and rule engine
+- github-app/ — GitHub App integration
+- src/guardrails_cli/ — Published CLI package
+- docs/ — Architecture notes
+
+## Requirements
+- Python 3.9+
+- Dependencies in backend/requirements.txt
+
+## Local setup
+```sh
+cd Topcoder/backend
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+## Run the server
 ```sh
 uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-## GitHub App Integration
-The GitHub app scans PRs and posts a Guardrails report plus a check run, with inline PR review comments for findings in the diff.
-It also scans push events and reports results on the latest commit.
+## Configuration (environment variables)
+Core settings:
+- OPENAI_API_KEY (optional) — used when no per-user key exists
+- SETTINGS_SCOPE (default: global) — global | user | ip
+- SETTINGS_TOKEN (optional) — protects settings endpoints
+- SETTINGS_ENC_KEY (recommended) — encrypts persisted settings
+- SETTINGS_STORE_PATH (default: settings.enc) — encrypted settings file
+- REQUIRE_AI_REVIEW_DEFAULT (default: false)
+
+Audit logging:
+- AUDIT_LOG_ENABLED (default: true)
+- AUDIT_LOG_PATH (default: audit_log.jsonl)
+- AUDIT_LOG_STORE_OUTPUT (default: true)
+
+Data residency:
+- DATA_RESIDENCY (optional)
+
+## GitHub App integration
+The GitHub App scans PRs and pushes, posts comments/checks, and reads repo overrides from .guardrails/config.yml|yaml|json.
 
 Environment variables:
-- `BACKEND_URL` (required): Guardrails API base URL
-- `OVERRIDE_LABEL` (optional): label name that allows blocking overrides (default: `guardrails-override`)
-- `MAX_FILES` (optional): maximum files per PR to scan (default: 100)
-- `MAX_FILE_BYTES` (optional): max file size in bytes (default: 200000)
-- `USE_ASYNC_SCAN` (optional): enable async scan flow (default: false)
+- BACKEND_URL (required)
+- OVERRIDE_LABEL (optional, default: guardrails-override)
+- MAX_FILES (optional, default: 100)
+- MAX_FILE_BYTES (optional, default: 200000)
+- USE_ASYNC_SCAN (optional, default: false)
 
-The app reads `.guardrails/config.yml|yaml|json` from the repo when available to apply `sector` and `policy` overrides.
-
-## Hosted usage (no repo cloning)
-If you deploy the backend as a hosted service, people can use it in two simple ways:
-
-### 1) Website-only (no CLI)
-1) Go to the website: https://topcoder-production.up.railway.app
-2) Open `/settings/ui`.
-3) Paste your OpenAI API key and click “Save Key”.
-4) Choose AI mode and Auto-fix defaults.
-5) Use the GitHub App integration (if installed) or call the API directly.
-
-### 2) Install CLI and scan locally (most common)
-1) `pip install guardrails-cli`
-2) (First time only) Open `/settings/ui` on the website and save your API key.
-3) Copy `guardrails_user_token` from your browser’s local storage.
-4) From any repo: `guardrails scan . --user <token>`
-
-Per-user flow (required when `SETTINGS_SCOPE=user`):
-- The UI generates a **User Token** and stores it locally in the browser
-- All settings are saved per token
-
-Optional protection:
-- Set `SETTINGS_TOKEN` to protect the settings endpoints
-
-This enables scanning any connected GitHub repo via the app, or calling the API directly from external tools.
-
-## CLI usage (scan any local repo)
-Use the CLI wrapper to scan any repo from its root:
-- Install: `pip install guardrails-cli`
-- Run: `guardrails scan <repo-path> --user <token>`
-- Default hosted URL is `https://topcoder-production.up.railway.app`
-- Set `GUARDRAILS_API_URL` to override the default and avoid passing `--api` every time
-- Optional `--autofix` applies safe local fixes and stores backups in `.guardrails_backup`
-- Use `--no-ai` to explicitly disable AI review for that run
-- For `SETTINGS_SCOPE=user`, pass `--user <token>` or set `GUARDRAILS_USER` to match the UI token
-
-Local install from repo (optional):
-- Run `python install-cli.py` from this repo to add `guardrails` to your PATH
-- After that, run `guardrails scan <repo-path>` from any folder
-
-Publish automation (PyPI):
-- Run `python publish_cli.py` to bump patch version, build, and upload
-- Run `python publish_cli.py --watch` to auto-publish on changes
-Docker auto-publish:
-- Set `PUBLISH_CLI=true` plus `TWINE_USERNAME=__token__` and `TWINE_PASSWORD=<pypi-token>`
-
-## CLI settings (no website required)
-You can manage the same settings from the CLI:
-- Generate a local key: `python guardrails.py settings --generate-local-key`
-- Set API key: `python guardrails.py settings --set-api-key <key>`
-- Set AI mode: `python guardrails.py settings --ai-mode require|allow`
-- Set auto-fix default: `python guardrails.py settings --autofix-mode on|off`
-- Verify settings sync: `python guardrails.py settings --verify`
-
-Optional flags:
-- `--api` to target a different backend URL
-- `--token` if SETTINGS_TOKEN is enabled on the server
-- `--user` to set `X-Guardrails-User` for scoped settings (useful behind shared IPs)
-
-## GitHub App endpoint
-Use the same deployment for the webhook URL:
-- Webhook URL: https://topcoder-production.up.railway.app
-
-## Scan an entire repository
-From the `Topcoder/backend` directory, run:
+## CLI usage
+Install:
 ```sh
-python scan_repo.py .. --api https://topcoder-production.up.railway.app --sector finance --output scan_results.json
+pip install guardrails-cli
+```
+
+Scan:
+```sh
+guardrails scan <repo-path> --user <token>
 ```
 
 Notes:
-- The scan writes a JSON report to `scan_results.json`.
-- Adjust `--api` for local (`http://127.0.0.1:8000`) or hosted usage.
-- Use `--max-files` to limit large repos.
+- Default hosted URL is https://topcoder-production.up.railway.app
+- Override with GUARDRAILS_API_URL or --api
+- Use --autofix to apply safe local fixes
+- Use --no-ai to disable AI review for a run
 
-## API Endpoints
-- `GET /health` — Health check
-- `POST /analyze` — Analyze code (JSON: `{ "code": "..." }`)
-- `POST /analyze-batch` — Analyze multiple files
-- `POST /scan/async` — Queue an asynchronous scan
-- `GET /scan/status/{job_id}` — Check async scan status
-- `GET /dashboard` — View audit dashboard
-- `GET /audit/export` — Export audit log
-- `GET /report/summary` — Audit summary counts
-- `GET /rulepacks` — List rulepacks
-- `POST /rulepacks` — Upload a rulepack
-- `GET /docs` — Interactive API docs (Swagger UI)
+## CLI settings (no UI required)
+```sh
+python guardrails.py settings --generate-local-key
+python guardrails.py settings --set-api-key <key>
+python guardrails.py settings --ai-mode require|allow
+python guardrails.py settings --autofix-mode on|off
+python guardrails.py settings --verify
+```
+
+## API endpoints
+- GET /health
+- GET /
+- GET /dashboard
+- GET /settings
+- POST /settings/token
+- GET /settings/ui
+- POST /settings/api-key
+- POST /settings/ai-mode
+- POST /settings/autofix-mode
+- POST /analyze
+- POST /analyze-batch
+- POST /scan/async
+- GET /scan/status/{job_id}
+- GET /report/summary
+- GET /rulepacks
+- POST /rulepacks
+- GET /audit/export
+- GET /docs
 
 ## Testing
-Run all backend tests:
 ```sh
 pytest
 ```
-
-Manual end-to-end usage (what you actually do):
-1) Open `/settings/ui` (a user token is created automatically when `SETTINGS_SCOPE=user`).
-2) Paste your OpenAI API key and set AI/Auto-fix defaults.
-3) From any repo, run `guardrails scan . --user <token>`.
-4) Confirm the scan results in `scan_results.json` and audit entries in the dashboard.
-
-CLI-only test (no UI):
-1) `guardrails settings --generate-local-key` (optional)
-2) `guardrails settings --set-api-key <key> --user <token>`
-3) `guardrails settings --ai-mode require --user <token>`
-4) `guardrails scan . --user <token>`
-
-## Notes
-- All dependencies are listed in `requirements.txt`.
-- The dashboard reads from `audit_log.jsonl`.
-- For production, set environment variables securely and use HTTPS.
-
-## Changelog
-- 2026-01-26: Full test and endpoint verification, requirements and documentation updated.
+- `GET /report/summary` — Audit summary counts

@@ -6,6 +6,8 @@ COPY backend/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt && pip install --no-cache-dir build twine
 
 COPY backend/ /app
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
 ENV PORT=8000 \
 	AUDIT_LOG_ENABLED=true \
@@ -15,6 +17,7 @@ ENV PORT=8000 \
 	SETTINGS_SCOPE=user \
 	SETTINGS_STORE_PATH=settings.enc \
 	REQUIRE_AI_REVIEW_DEFAULT=false
+VOLUME ["/app"]
 EXPOSE 8000
 
-CMD ["/bin/sh", "-c", "if [ \"$PUBLISH_CLI\" = \"true\" ]; then python publish_cli.py; fi; python -m uvicorn main:app --host 0.0.0.0 --port ${PORT}"]
+ENTRYPOINT ["/app/entrypoint.sh"]
