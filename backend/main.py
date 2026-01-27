@@ -214,45 +214,50 @@ def settings_ui():
         <meta name='viewport' content='width=device-width, initial-scale=1'>
         <style>
             :root {
-                --bg: #f6f8fb;
-                --card: #ffffff;
-                --text: #0f172a;
-                --muted: #64748b;
-                --primary: #3b4cca;
-                --primary-dark: #2b3aa0;
-                --accent: #0ea5e9;
-                --border: #e2e8f0;
-                --success: #15803d;
-                --error: #b91c1c;
+                --bg: #0b1020;
+                --surface: #121933;
+                --card: #151f3d;
+                --text: #e2e8f0;
+                --muted: #94a3b8;
+                --primary: #60a5fa;
+                --primary-strong: #3b82f6;
+                --success: #22c55e;
+                --warning: #f59e0b;
+                --danger: #ef4444;
+                --border: #243158;
+                --shadow: 0 12px 30px rgba(2, 6, 23, 0.45);
+                --glow: 0 0 0 3px rgba(96, 165, 250, 0.25);
             }
             * { box-sizing: border-box; }
-            body { font-family: 'Segoe UI', Arial, sans-serif; background: var(--bg); margin: 0; color: var(--text); }
-            .container { max-width: 920px; margin: 2.5rem auto; padding: 0 1.25rem; }
-            .panel { background: var(--card); border-radius: 16px; box-shadow: 0 10px 30px #0f172a12; padding: 2rem; border: 1px solid var(--border); }
-            h1 { color: var(--text); margin: 0 0 0.35rem 0; font-size: 1.6rem; }
-            p { margin: 0.4rem 0 0 0; }
+            body { margin: 0; font-family: 'Segoe UI', Arial, sans-serif; background: radial-gradient(circle at top, #141b3a 0%, #0b1020 55%, #070b16 100%); color: var(--text); }
+            .container { max-width: 980px; margin: 2.5rem auto; padding: 0 1.25rem; }
+            .panel { background: linear-gradient(160deg, rgba(21,31,61,0.98), rgba(16,25,48,0.96)); border-radius: 18px; box-shadow: var(--shadow); padding: 2.2rem; border: 1px solid var(--border); }
+            h1 { margin: 0 0 0.4rem 0; font-size: 1.7rem; letter-spacing: 0.2px; }
+            p { margin: 0.4rem 0 0 0; color: var(--muted); }
             label { display: block; font-weight: 600; margin: 1rem 0 0.4rem 0; color: var(--text); }
-            input { width: 100%; padding: 0.7rem; border: 1px solid var(--border); border-radius: 10px; font-size: 0.98rem; background: #fff; }
-            input:focus { outline: 2px solid #c7d2fe; border-color: #c7d2fe; }
-            .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-top: 1.5rem; }
-            .card { padding: 1rem; background: #f8fafc; border-radius: 12px; border: 1px solid var(--border); }
-            .actions { margin-top: 1.2rem; display: flex; gap: 0.6rem; flex-wrap: wrap; }
-            button { background: var(--primary); color: #fff; border: 0; padding: 0.65rem 1rem; border-radius: 10px; font-size: 0.95rem; cursor: pointer; }
-            button.secondary { background: #0f172a; }
-            button.alt { background: #0f766e; }
-            button.ghost { background: #e2e8f0; color: #0f172a; }
-            button:disabled { background: #a5b4fc; cursor: not-allowed; }
-            button { transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.2s ease, color 0.2s ease; }
-            button:hover { transform: translateY(-1px); box-shadow: 0 6px 16px #0f172a20; }
-            button:active { transform: translateY(0); box-shadow: none; }
-            .selected { box-shadow: 0 0 0 3px #c7d2fe; transform: translateY(-1px); }
+            input { width: 100%; padding: 0.75rem 0.85rem; border: 1px solid var(--border); border-radius: 12px; font-size: 0.98rem; background: #0f172a; color: var(--text); }
+            input:focus { outline: none; border-color: var(--primary); box-shadow: var(--glow); }
+            .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-top: 1.6rem; }
+            .card { padding: 1rem; background: rgba(15, 23, 42, 0.7); border-radius: 14px; border: 1px solid var(--border); }
+            .section-title { font-weight: 600; margin-bottom: 0.4rem; color: var(--text); }
+            .actions { margin-top: 1.1rem; display: flex; gap: 0.6rem; flex-wrap: wrap; }
+            .btn { background: var(--primary-strong); color: #fff; border: 1px solid transparent; padding: 0.65rem 1rem; border-radius: 999px; font-size: 0.92rem; cursor: pointer; font-weight: 600; }
+            .btn.secondary { background: #111827; border-color: #1f2937; }
+            .btn.alt { background: var(--success); }
+            .btn.warning { background: var(--warning); }
+            .btn.ghost { background: transparent; color: var(--text); border-color: var(--border); }
+            .btn:disabled { background: #475569; cursor: not-allowed; }
+            .btn { transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.2s ease, color 0.2s ease, border 0.2s ease; }
+            .btn:hover { transform: translateY(-1px); box-shadow: 0 10px 20px rgba(15, 23, 42, 0.4); }
+            .btn:active { transform: translateY(0); box-shadow: none; }
+            .btn.selected { border-color: var(--primary); box-shadow: var(--glow); }
+            .btn.selected::after { content: "Active"; margin-left: 0.5rem; background: rgba(15, 23, 42, 0.8); color: #fff; padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.72rem; }
             .pulse { animation: pulse 0.6s ease; }
-            @keyframes pulse { 0% { box-shadow: 0 0 0 0 #c7d2fe; } 100% { box-shadow: 0 0 0 10px transparent; } }
+            @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(96, 165, 250, 0.35); } 100% { box-shadow: 0 0 0 12px transparent; } }
             .status { margin-top: 0.8rem; font-size: 0.95rem; }
             .success { color: var(--success); }
-            .error { color: var(--error); }
+            .error { color: var(--danger); }
             .muted { color: var(--muted); }
-            .section-title { font-weight: 600; margin-bottom: 0.4rem; }
         </style>
     </head>
     <body>
@@ -270,16 +275,16 @@ def settings_ui():
                         <div class='section-title'>AI mode</div>
                         <div id='ai-mode-status' class='status muted'>Loading AI mode...</div>
                         <div class='actions'>
-                            <button id='aiOnBtn' type='button'>Require AI</button>
-                            <button id='aiOffBtn' type='button' class='ghost'>Allow non-AI</button>
+                            <button id='aiOnBtn' type='button' class='btn warning' aria-pressed='false'>Require AI</button>
+                            <button id='aiOffBtn' type='button' class='btn ghost' aria-pressed='false'>Allow non-AI</button>
                         </div>
                     </div>
                     <div class='card'>
                         <div class='section-title'>Auto-fix default</div>
                         <div id='autofix-status' class='status muted'>Loading auto-fix...</div>
                         <div class='actions'>
-                            <button id='autofixOnBtn' type='button'>Enable auto-fix</button>
-                            <button id='autofixOffBtn' type='button' class='ghost'>Disable auto-fix</button>
+                            <button id='autofixOnBtn' type='button' class='btn alt' aria-pressed='false'>Enable auto-fix</button>
+                            <button id='autofixOffBtn' type='button' class='btn ghost' aria-pressed='false'>Disable auto-fix</button>
                         </div>
                     </div>
                 </div>
@@ -294,10 +299,10 @@ def settings_ui():
                 <input id='userToken' type='text' placeholder='Auto-generated and stored locally' />
 
                 <div class='actions'>
-                    <button id='saveBtn'>Save Key</button>
-                    <button id='genKeyBtn' type='button' class='ghost'>Generate Settings Key</button>
-                    <button id='genUserBtn' type='button' class='alt'>Generate User Token</button>
-                    <button id='setUserBtn' type='button' class='secondary'>Use User Token</button>
+                    <button id='saveBtn' class='btn'>Save Key</button>
+                    <button id='genKeyBtn' type='button' class='btn ghost'>Generate Settings Key</button>
+                    <button id='genUserBtn' type='button' class='btn alt'>Generate User Token</button>
+                    <button id='setUserBtn' type='button' class='btn secondary'>Use User Token</button>
                 </div>
                 <div id='result' class='status'></div>
                 <div id='genResult' class='status'></div>
@@ -364,16 +369,22 @@ def settings_ui():
                         : 'Non-AI mode is allowed by default.';
                     aiOnBtn.classList.toggle('selected', !!data.require_ai_review);
                     aiOffBtn.classList.toggle('selected', !data.require_ai_review);
+                    aiOnBtn.setAttribute('aria-pressed', data.require_ai_review ? 'true' : 'false');
+                    aiOffBtn.setAttribute('aria-pressed', data.require_ai_review ? 'false' : 'true');
                     if (typeof data.autofix_default === 'boolean') {
                         autofixEl.textContent = data.autofix_default
                             ? 'Auto-fix is enabled by default.'
                             : 'Auto-fix is disabled by default.';
                         autofixOnBtn.classList.toggle('selected', !!data.autofix_default);
                         autofixOffBtn.classList.toggle('selected', !data.autofix_default);
+                        autofixOnBtn.setAttribute('aria-pressed', data.autofix_default ? 'true' : 'false');
+                        autofixOffBtn.setAttribute('aria-pressed', data.autofix_default ? 'false' : 'true');
                     } else {
                         autofixEl.textContent = 'Auto-fix default is not set.';
                         autofixOnBtn.classList.remove('selected');
                         autofixOffBtn.classList.remove('selected');
+                        autofixOnBtn.setAttribute('aria-pressed', 'false');
+                        autofixOffBtn.setAttribute('aria-pressed', 'false');
                     }
                 } catch (err) {
                     statusEl.textContent = 'Unable to load status.';
