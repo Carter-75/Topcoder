@@ -19,7 +19,7 @@ PY
   fi
 fi
 
-if [ "${PUBLISH_CLI:-}" = "true" ] && [ -f "/app/publish_cli.py" ]; then
+if [ "${PUBLISH_CLI:-}" = "true" ] && [ -f "/app/publish_cli.py" ] && [ -f "/app/pyproject.toml" ]; then
   python /app/publish_cli.py
 fi
 
