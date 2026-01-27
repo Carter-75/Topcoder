@@ -11,6 +11,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
       - name: Auto-bump version on CLI changes
         id: bump
@@ -22,6 +24,13 @@ jobs:
 
           def run(cmd: str) -> str:
               return subprocess.check_output(cmd, shell=True, text=True).strip()
+
+          last_author = run("git log -1 --pretty=%an")
+          last_message = run("git log -1 --pretty=%s")
+          if last_author == "github-actions[bot]" or "chore(cli): bump version" in last_message:
+              print("Last commit is an auto-bump; skipping bump.")
+              Path("bump.env").write_text("bumped=false\n", encoding="utf-8")
+              return
 
           diff = run("git diff --name-only HEAD^ HEAD")
           changed = [line for line in diff.splitlines() if line]
