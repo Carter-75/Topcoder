@@ -97,6 +97,45 @@ def _write_backup(backup_root: str, repo_root: str, rel_path: str, code: str) ->
         f.write(code)
 
 
+def _has_findings(file_findings: Dict[str, Any]) -> bool:
+    for key in ("issues", "coding_issues", "license_ip_issues", "sector_issues", "ai_suggestions", "repo_license_issues"):
+        items = file_findings.get(key)
+        if isinstance(items, list) and items:
+            return True
+    return False
+
+
+def _rewrite_full_fix(
+    api_url: str,
+    rel_path: str,
+    code: str,
+    findings: Dict[str, Any],
+    repo_path: str,
+    api_key: Optional[str],
+    user_key: Optional[str],
+    ai_model: Optional[str],
+) -> str:
+    payload = {
+        "path": rel_path,
+        "code": code,
+        "findings": findings,
+        "repo_path": repo_path,
+        "ai_model": ai_model,
+    }
+    headers: Dict[str, str] = {}
+    if api_key:
+        headers["X-OpenAI-API-Key"] = api_key
+    if user_key:
+        headers["X-Guardrails-User"] = user_key
+    resp = requests.post(f"{api_url.rstrip('/')}/autofix/full", json=payload, headers=headers, timeout=120)
+    resp.raise_for_status()
+    data = resp.json()
+    rewritten = data.get("code")
+    if isinstance(rewritten, str) and rewritten.strip():
+        return rewritten
+    return code
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Scan a repository using the Guardrails API.")
     parser.add_argument("repo", nargs="?", default=".", help="Path to the repository root (defaults to current directory)")
@@ -115,8 +154,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--no-autofix", action="store_true", help="Disable autofix explicitly")
     parser.add_argument("--no-backup", action="store_true", help="Disable autofix backups")
     parser.add_argument("--no-ai", action="store_true", help="Disable AI review for this run")
-    parser.add_argument("--full-fix", action="store_true", help="Apply safe autofixes and fail if findings remain")
-    parser.add_argument("--no-full-fix", action="store_true", help="Disable full fix explicitly")
+    parser.add_argument("--full-fix", action="store_true", help="Use AI rewrite to fix all findings after safe autofix")
     args = parser.parse_args(argv)
 
     repo_path = os.path.abspath(args.repo)
@@ -126,7 +164,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     user_key = args.user.strip() or None
     require_ai_review: Optional[bool] = None
     server_has_key = False
-    full_fix_enabled: Optional[bool] = None
+    full_fix_enabled = args.full_fix
 
     if not api_key and user_key:
         try:
@@ -153,11 +191,6 @@ def main(argv: Optional[List[str]] = None) -> int:
                 require_ai_review = False
         except Exception:
             require_ai_review = False
-
-    if args.full_fix:
-        full_fix_enabled = True
-    elif args.no_full_fix:
-        full_fix_enabled = False
 
     if args.autofix:
         autofix_enabled = True
@@ -194,20 +227,14 @@ def main(argv: Optional[List[str]] = None) -> int:
                         raise RuntimeError("Missing user token for user-scoped settings.")
                 if isinstance(data.get("autofix_default"), bool):
                     autofix_enabled = data["autofix_default"]
-                if full_fix_enabled is None and isinstance(data.get("full_fix_default"), bool):
-                    full_fix_enabled = data["full_fix_default"]
                 if not ai_model and isinstance(data.get("ai_model"), str):
                     ai_model = data["ai_model"]
                 if ai_review_max_chars <= 0 and isinstance(data.get("ai_review_max_chars"), int):
                     ai_review_max_chars = data["ai_review_max_chars"]
         except Exception:
             autofix_enabled = None
-        if full_fix_enabled is None and os.isatty(0):
-            try:
-                answer = input("Enable full fix mode (auto-fix + fail on any remaining findings)? [y/N]: ").strip().lower()
-                full_fix_enabled = answer in {"y", "yes"}
-            except Exception:
-                full_fix_enabled = False
+        if full_fix_enabled:
+            autofix_enabled = True
         if autofix_enabled is None:
             if os.isatty(0):
                 try:
@@ -303,8 +330,89 @@ def main(argv: Optional[List[str]] = None) -> int:
             for file_path in batch_paths:
                 results["errors"][file_path] = [str(exc)]
 
+    full_fix_rewrites: Dict[str, str] = {}
+    if full_fix_enabled:
+        for rel_path, file_findings in results.get("findings", {}).items():
+            if not isinstance(file_findings, dict) or not _has_findings(file_findings):
+                continue
+            abs_path = os.path.join(repo_path, rel_path)
+            try:
+                with open(abs_path, "r", encoding="utf-8", errors="ignore") as f:
+                    code = f.read()
+                rewritten = _rewrite_full_fix(
+                    args.api,
+                    rel_path,
+                    code,
+                    file_findings,
+                    repo_path,
+                    api_key or None,
+                    user_key,
+                    ai_model or None,
+                )
+                if rewritten != code:
+                    with open(abs_path, "w", encoding="utf-8") as f:
+                        f.write(rewritten)
+                    full_fix_rewrites[rel_path] = "rewritten"
+            except Exception as exc:
+                results["errors"][rel_path] = [str(exc)]
+
+        if full_fix_rewrites:
+            rewrite_batch: List[Tuple[str, str]] = []
+            rewrite_paths: List[str] = []
+            for rel_path in full_fix_rewrites.keys():
+                abs_path = os.path.join(repo_path, rel_path)
+                try:
+                    with open(abs_path, "r", encoding="utf-8", errors="ignore") as f:
+                        code = f.read()
+                    rewrite_batch.append((rel_path, code))
+                    rewrite_paths.append(rel_path)
+                    if len(rewrite_batch) >= args.chunk_size:
+                        refreshed = analyze_batch(
+                            args.api,
+                            rewrite_batch,
+                            args.sector,
+                            repo_path,
+                            api_key or None,
+                            require_ai_review,
+                            ai_model or None,
+                            ai_review_max_chars if ai_review_max_chars > 0 else None,
+                            user_key,
+                        )
+                        for file_path, file_findings in refreshed.get("findings", {}).items():
+                            results["findings"][file_path] = file_findings
+                        for file_path, file_errors in refreshed.get("errors", {}).items():
+                            results["errors"][file_path] = file_errors
+                        rewrite_batch = []
+                        rewrite_paths = []
+                except Exception as exc:
+                    results["errors"][rel_path] = [str(exc)]
+
+            if rewrite_batch:
+                try:
+                    refreshed = analyze_batch(
+                        args.api,
+                        rewrite_batch,
+                        args.sector,
+                        repo_path,
+                        api_key or None,
+                        require_ai_review,
+                        ai_model or None,
+                        ai_review_max_chars if ai_review_max_chars > 0 else None,
+                        user_key,
+                    )
+                    for file_path, file_findings in refreshed.get("findings", {}).items():
+                        results["findings"][file_path] = file_findings
+                    for file_path, file_errors in refreshed.get("errors", {}).items():
+                        results["errors"][file_path] = file_errors
+                except Exception as exc:
+                    for file_path in rewrite_paths:
+                        results["errors"][file_path] = [str(exc)]
+
     if autofix_changes:
         results["autofix_changes"] = autofix_changes
+
+    if full_fix_rewrites:
+        results["full_fix_rewrites"] = full_fix_rewrites
 
     if full_fix_enabled:
         remaining_counts = {

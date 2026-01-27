@@ -154,3 +154,47 @@ def ai_review(
             "suggestion": "Retry the scan or disable AI review for this run.",
             "severity": "warning",
         }]
+
+
+def ai_rewrite(
+    code: str,
+    findings: List[Dict[str, Any]],
+    api_key_override: str | None = None,
+    context: dict | None = None,
+    model_override: str | None = None,
+) -> str:
+    api_key = api_key_override or os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        raise ValueError("OPENAI_API_KEY is required for AI rewrite.")
+    model = model_override or os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+    ctx = context or {}
+    file_path = ctx.get("path", "unknown")
+    language = ctx.get("language", "unknown")
+    issues_text = json.dumps(findings, ensure_ascii=False)
+    prompt = (
+        "You are a senior engineer. Rewrite the file to fix all findings and warnings. "
+        "Preserve behavior unless a finding requires a change. Use best practices. "
+        "Return ONLY the full updated file contents, no markdown or code fences.\n\n"
+        f"File: {file_path}\nLanguage: {language}\nFindings: {issues_text}\n\n"
+        f"Original file:\n{code}"
+    )
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": "Rewrite the code to fix the findings. Return only the full file contents."},
+            {"role": "user", "content": prompt},
+        ],
+        "max_tokens": 2048,
+        "temperature": 0.1,
+    }
+    resp = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=60)
+    resp.raise_for_status()
+    content = resp.json()["choices"][0]["message"]["content"]
+    if content.startswith("```"):
+        content = re.sub(r"^```[a-zA-Z]*\s*", "", content)
+        content = re.sub(r"```\s*$", "", content)
+    return content.strip("\n")
