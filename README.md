@@ -102,7 +102,11 @@ Use the lightweight CLI wrapper to scan any repo from its root:
 - For `SETTINGS_SCOPE=user`, pass `--user <token>` or set `GUARDRAILS_USER` to match the UI token
 - If no token is provided, the CLI prompts to paste one or generates a new token
 
-One-time install (cross-platform, Python only):
+Install without cloning (PyPI):
+- `pip install guardrails-cli`
+- Then run `guardrails scan <repo-path>` from any folder
+
+Local install from repo (optional):
 - Run `python install-cli.py` from this repo to add `guardrails` to your PATH
 - After that, run `guardrails scan <repo-path>` from any folder
 

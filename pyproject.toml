@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "guardrails-cli"
+version = "0.1.0"
+description = "Guardrails CLI for scanning repositories"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Carter" }]
+dependencies = [
+  "requests",
+  "cryptography",
+]
+
+[project.scripts]
+guardrails = "guardrails_cli.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
