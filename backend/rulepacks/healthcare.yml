@@ -1,0 +1,12 @@
+# Example Healthcare Sector Rule Pack
+rules:
+  - id: HC-001
+    type: logging_practice
+    message: "Do not log PHI (protected health information)."
+    pattern: "patient_name|ssn|dob"
+    severity: blocking
+  - id: HC-002
+    type: naming_convention
+    message: "Use 'patient_' prefix for patient-related variables."
+    pattern: "patient_"
+    severity: warning

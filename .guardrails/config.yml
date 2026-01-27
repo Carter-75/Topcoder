@@ -1,0 +1,15 @@
+# Example Guardrails Config (YAML)
+
+policy:
+  hardcoded_secret: blocking
+  sql_injection_risk: blocking
+  insecure_deserialization: warning
+  unsafe_execution: warning
+  copilot_generated_code: warning
+  naming_convention: advisory
+  logging_practice: advisory
+  error_handling: warning
+  license_detected: warning
+  ip_duplication: warning
+
+# You can override or extend rules per repo or org.

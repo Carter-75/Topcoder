@@ -1,0 +1,16 @@
+{
+  "name": "github-guardrails-app",
+  "version": "0.1.0",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "scripts": {
+    "start": "probot run ./index.ts"
+  },
+  "dependencies": {
+    "probot": "^13.0.0",
+    "node-fetch": "^2.6.7"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

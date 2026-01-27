@@ -1,0 +1,12 @@
+# Example Finance Sector Rule Pack
+rules:
+  - id: FIN-001
+    type: logging_practice
+    message: "All financial transactions must be logged with transaction ID."
+    pattern: "transaction_id"
+    severity: blocking
+  - id: FIN-002
+    type: error_handling
+    message: "Do not suppress exceptions in payment processing."
+    pattern: "except:|except Exception:"
+    severity: blocking

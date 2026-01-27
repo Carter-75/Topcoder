@@ -1,0 +1,12 @@
+# Example Public Sector Rule Pack
+rules:
+  - id: PS-001
+    type: license_detected
+    message: "Public sector code must not include GPL-licensed code."
+    pattern: "GPL"
+    severity: blocking
+  - id: PS-002
+    type: error_handling
+    message: "All exceptions must be logged for audit."
+    pattern: "except"
+    severity: warning

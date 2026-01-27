@@ -1,0 +1,22 @@
+name: github-guardrails-app
+on:
+  pull_request:
+    types: [opened, synchronize]
+  push:
+    branches: [main]
+
+jobs:
+  guardrails:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Load Guardrails Config
+        id: config
+        run: |
+          if [ -f .guardrails/config.yml ]; then
+            echo "CONFIG=$(cat .guardrails/config.yml | base64)" >> $GITHUB_ENV
+          fi
+      - name: Run Guardrails App
+        uses: ./github-app
+        env:
+          CONFIG: ${{ env.CONFIG }}
