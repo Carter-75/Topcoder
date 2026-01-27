@@ -21,31 +21,42 @@ def dashboard():
         <title>Guardrails Dashboard</title>
         <meta name='viewport' content='width=device-width, initial-scale=1'>
         <style>
-            body { font-family: 'Segoe UI', Arial, sans-serif; background: #f7f9fa; margin: 0; }
-            .container { max-width: 900px; margin: 2rem auto; background: #fff; border-radius: 12px; box-shadow: 0 2px 8px #0001; padding: 2rem; }
-            h1 { color: #1a237e; }
-            table { width: 100%; border-collapse: collapse; margin-top: 1.5rem; }
-            th, td { padding: 0.7rem 1rem; border-bottom: 1px solid #e0e0e0; }
-            th { background: #e3eafc; color: #1a237e; }
-            tr:hover { background: #f1f6ff; }
-            .severity-blocking { color: #d32f2f; font-weight: bold; }
-            .severity-warning { color: #fbc02d; font-weight: bold; }
-            .severity-advisory { color: #1976d2; font-weight: bold; }
-            .policy { font-size: 0.95em; padding: 0.2em 0.6em; border-radius: 6px; }
-            .policy-blocking { background: #ffd6d6; color: #b71c1c; }
-            .policy-warning { background: #fff9c4; color: #f57c00; }
-            .policy-advisory { background: #e3f2fd; color: #1565c0; }
+            :root {
+                --bg: #f6f8fb;
+                --card: #ffffff;
+                --text: #0f172a;
+                --muted: #64748b;
+                --primary: #3b4cca;
+                --border: #e2e8f0;
+            }
+            * { box-sizing: border-box; }
+            body { font-family: 'Segoe UI', Arial, sans-serif; background: var(--bg); margin: 0; color: var(--text); }
+            .container { max-width: 1000px; margin: 2.5rem auto; padding: 0 1.25rem; }
+            .panel { background: var(--card); border-radius: 16px; box-shadow: 0 10px 30px #0f172a12; padding: 2rem; border: 1px solid var(--border); }
+            h1 { color: var(--text); margin: 0 0 0.35rem 0; }
+            .actions { margin: 1rem 0 1.5rem 0; display: flex; gap: 0.6rem; flex-wrap: wrap; }
+            .actions a { background: var(--primary); color: #fff; padding: 0.55rem 1rem; border-radius: 10px; text-decoration: none; font-size: 0.95rem; }
+            .summary { color: var(--muted); }
+            table { width: 100%; border-collapse: collapse; margin-top: 1.2rem; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+            th, td { padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); }
+            th { background: #eef2ff; color: #1e1b4b; text-align: left; }
+            tr:hover { background: #f8fafc; }
+            .policy { font-size: 0.9em; padding: 0.2em 0.6em; border-radius: 999px; }
+            .policy-blocking { background: #fee2e2; color: #991b1b; }
+            .policy-warning { background: #fef3c7; color: #92400e; }
+            .policy-advisory { background: #e0f2fe; color: #075985; }
         </style>
     </head>
     <body>
         <div class="container">
-            <h1>Guardrails Audit Dashboard</h1>
-            <div style='margin: 1rem 0 1.5rem 0; display: flex; gap: 0.6rem; flex-wrap: wrap;'>
-                <a href='/settings/ui' style='background:#3949ab;color:#fff;padding:0.6rem 1rem;border-radius:8px;text-decoration:none;'>Settings</a>
-                <a href='/docs' style='background:#5c6bc0;color:#fff;padding:0.6rem 1rem;border-radius:8px;text-decoration:none;'>API Docs</a>
-                <a href='/health' style='background:#7e57c2;color:#fff;padding:0.6rem 1rem;border-radius:8px;text-decoration:none;'>Health</a>
-            </div>
-            <p>Total Analyses: <b>{count}</b></p>
+            <div class="panel">
+                <h1>Guardrails Audit Dashboard</h1>
+                <div class="actions">
+                    <a href='/settings/ui'>Settings</a>
+                    <a href='/docs'>API Docs</a>
+                    <a href='/health'>Health</a>
+                </div>
+                <p class="summary">Total Analyses: <b>{count}</b></p>
             <table>
                 <tr>
                     <th>Timestamp</th>
@@ -68,7 +79,8 @@ def dashboard():
         html += "</tr>"
     html += """
             </table>
-            <p style='margin-top:2rem;color:#888;font-size:0.95em;'>Showing last 100 analyses. For full export, see audit_log.jsonl.</p>
+                <p style='margin-top:2rem;color:#64748b;font-size:0.95em;'>Showing last 100 analyses. For full export, see audit_log.jsonl.</p>
+            </div>
         </div>
     </body>
     </html>

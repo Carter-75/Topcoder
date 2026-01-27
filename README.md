@@ -89,6 +89,13 @@ Settings UI:
 - When `SETTINGS_SCOPE=user`, the UI generates a per-user token and stores it locally.
 - You can also paste an existing token (from CLI) and click “Use User Token”.
 
+Step-by-step (UI only):
+1) Open `/settings/ui`.
+2) Click “Generate User Token” (or paste one and click “Use User Token”).
+3) Paste your OpenAI API key and click “Save Key”.
+4) Choose AI mode and Auto-fix defaults.
+5) Use the CLI with the same token to scan any repo.
+
 ## CLI usage (scan any local repo)
 Use the lightweight CLI wrapper to scan any repo from its root:
 - Run the CLI in this repo via `python guardrails.py scan <repo-path>`
@@ -105,6 +112,11 @@ Use the lightweight CLI wrapper to scan any repo from its root:
 Install without cloning (PyPI):
 - `pip install guardrails-cli`
 - Then run `guardrails scan <repo-path>` from any folder
+
+Quick start (CLI):
+1) `pip install guardrails-cli`
+2) `guardrails scan . --user <token>`
+3) When prompted, paste the token from the UI (or press Enter to generate a new one)
 
 Local install from repo (optional):
 - Run `python install-cli.py` from this repo to add `guardrails` to your PATH
@@ -169,6 +181,12 @@ Manual end-to-end usage (what you actually do):
 2) Paste your OpenAI API key and set AI/Auto-fix defaults.
 3) From any repo, run `guardrails scan . --user <token>`.
 4) Confirm the scan results in `scan_results.json` and audit entries in the dashboard.
+
+CLI-only test (no UI):
+1) `guardrails settings --generate-local-key` (optional)
+2) `guardrails settings --set-api-key <key> --user <token>`
+3) `guardrails settings --ai-mode require --user <token>`
+4) `guardrails scan . --user <token>`
 
 ## Notes
 - All dependencies are listed in `requirements.txt`.

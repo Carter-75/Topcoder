@@ -213,64 +213,89 @@ def settings_ui():
         <title>Guardrails Settings</title>
         <meta name='viewport' content='width=device-width, initial-scale=1'>
         <style>
-            body { font-family: 'Segoe UI', Arial, sans-serif; background: #f7f9fa; margin: 0; }
-            .container { max-width: 720px; margin: 3rem auto; background: #fff; border-radius: 12px; box-shadow: 0 2px 8px #0001; padding: 2rem; }
-            h1 { color: #1a237e; margin-top: 0; }
-            label { display: block; font-weight: 600; margin-top: 1rem; }
-            input { width: 100%; padding: 0.65rem; border: 1px solid #d0d7de; border-radius: 8px; font-size: 1rem; }
-            button { margin-top: 1.2rem; background: #3949ab; color: #fff; border: 0; padding: 0.8rem 1.2rem; border-radius: 8px; font-size: 1rem; cursor: pointer; }
-            button:disabled { background: #9fa8da; cursor: not-allowed; }
-            .status { margin-top: 1rem; font-size: 0.95rem; }
-            .success { color: #2e7d32; }
-            .error { color: #c62828; }
-            .muted { color: #6b7280; }
-            .card { margin-top: 1.5rem; padding: 1rem; background: #f5f7ff; border-radius: 8px; }
+            :root {
+                --bg: #f6f8fb;
+                --card: #ffffff;
+                --text: #0f172a;
+                --muted: #64748b;
+                --primary: #3b4cca;
+                --primary-dark: #2b3aa0;
+                --accent: #0ea5e9;
+                --border: #e2e8f0;
+                --success: #15803d;
+                --error: #b91c1c;
+            }
+            * { box-sizing: border-box; }
+            body { font-family: 'Segoe UI', Arial, sans-serif; background: var(--bg); margin: 0; color: var(--text); }
+            .container { max-width: 920px; margin: 2.5rem auto; padding: 0 1.25rem; }
+            .panel { background: var(--card); border-radius: 16px; box-shadow: 0 10px 30px #0f172a12; padding: 2rem; border: 1px solid var(--border); }
+            h1 { color: var(--text); margin: 0 0 0.35rem 0; font-size: 1.6rem; }
+            p { margin: 0.4rem 0 0 0; }
+            label { display: block; font-weight: 600; margin: 1rem 0 0.4rem 0; color: var(--text); }
+            input { width: 100%; padding: 0.7rem; border: 1px solid var(--border); border-radius: 10px; font-size: 0.98rem; background: #fff; }
+            input:focus { outline: 2px solid #c7d2fe; border-color: #c7d2fe; }
+            .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-top: 1.5rem; }
+            .card { padding: 1rem; background: #f8fafc; border-radius: 12px; border: 1px solid var(--border); }
+            .actions { margin-top: 1.2rem; display: flex; gap: 0.6rem; flex-wrap: wrap; }
+            button { background: var(--primary); color: #fff; border: 0; padding: 0.65rem 1rem; border-radius: 10px; font-size: 0.95rem; cursor: pointer; }
+            button.secondary { background: #0f172a; }
+            button.alt { background: #0f766e; }
+            button.ghost { background: #e2e8f0; color: #0f172a; }
+            button:disabled { background: #a5b4fc; cursor: not-allowed; }
+            .status { margin-top: 0.8rem; font-size: 0.95rem; }
+            .success { color: var(--success); }
+            .error { color: var(--error); }
+            .muted { color: var(--muted); }
+            .section-title { font-weight: 600; margin-bottom: 0.4rem; }
         </style>
     </head>
     <body>
         <div class='container'>
-            <h1>Guardrails Settings</h1>
-            <p class='muted'>Store your OpenAI API key for Guardrails scans. If <b>SETTINGS_TOKEN</b> is configured on the server, include it below. Use the AI mode buttons to require AI or allow non-AI by default. When <b>SETTINGS_SCOPE=user</b> is enabled, settings are scoped to your user token.</p>
+            <div class='panel'>
+                <h1>Guardrails Settings</h1>
+                <p class='muted'>Per-user settings for API key, AI mode, and auto-fix. When <b>SETTINGS_SCOPE=user</b> is enabled, settings are scoped to your user token.</p>
 
-            <div class='card'>
-                <div id='current-status' class='status muted'>Checking current status...</div>
-            </div>
-
-            <div class='card'>
-                <div style='font-weight:600;margin-bottom:0.4rem;'>AI mode</div>
-                <div id='ai-mode-status' class='status muted'>Loading AI mode...</div>
-                <div style='margin-top:0.8rem; display:flex; gap:0.6rem; flex-wrap:wrap;'>
-                    <button id='aiOnBtn' type='button'>Require AI</button>
-                    <button id='aiOffBtn' type='button' style='background:#546e7a;'>Allow non-AI</button>
+                <div class='grid'>
+                    <div class='card'>
+                        <div class='section-title'>Status</div>
+                        <div id='current-status' class='status muted'>Checking current status...</div>
+                    </div>
+                    <div class='card'>
+                        <div class='section-title'>AI mode</div>
+                        <div id='ai-mode-status' class='status muted'>Loading AI mode...</div>
+                        <div class='actions'>
+                            <button id='aiOnBtn' type='button'>Require AI</button>
+                            <button id='aiOffBtn' type='button' class='ghost'>Allow non-AI</button>
+                        </div>
+                    </div>
+                    <div class='card'>
+                        <div class='section-title'>Auto-fix default</div>
+                        <div id='autofix-status' class='status muted'>Loading auto-fix...</div>
+                        <div class='actions'>
+                            <button id='autofixOnBtn' type='button'>Enable auto-fix</button>
+                            <button id='autofixOffBtn' type='button' class='ghost'>Disable auto-fix</button>
+                        </div>
+                    </div>
                 </div>
-            </div>
 
-            <div class='card'>
-                <div style='font-weight:600;margin-bottom:0.4rem;'>Auto-fix default</div>
-                <div id='autofix-status' class='status muted'>Loading auto-fix...</div>
-                <div style='margin-top:0.8rem; display:flex; gap:0.6rem; flex-wrap:wrap;'>
-                    <button id='autofixOnBtn' type='button'>Enable auto-fix</button>
-                    <button id='autofixOffBtn' type='button' style='background:#546e7a;'>Disable auto-fix</button>
+                <label for='apiKey'>OpenAI API Key</label>
+                <input id='apiKey' type='password' placeholder='sk-...' />
+
+                <label for='settingsToken'>Settings Token (optional)</label>
+                <input id='settingsToken' type='password' placeholder='Bearer token if required' />
+
+                <label for='userToken'>User Token (for user-scoped settings)</label>
+                <input id='userToken' type='text' placeholder='Auto-generated and stored locally' />
+
+                <div class='actions'>
+                    <button id='saveBtn'>Save Key</button>
+                    <button id='genKeyBtn' type='button' class='ghost'>Generate Settings Key</button>
+                    <button id='genUserBtn' type='button' class='alt'>Generate User Token</button>
+                    <button id='setUserBtn' type='button' class='secondary'>Use User Token</button>
                 </div>
+                <div id='result' class='status'></div>
+                <div id='genResult' class='status'></div>
             </div>
-
-            <label for='apiKey'>OpenAI API Key</label>
-            <input id='apiKey' type='password' placeholder='sk-...' />
-
-            <label for='settingsToken'>Settings Token (optional)</label>
-            <input id='settingsToken' type='password' placeholder='Bearer token if required' />
-
-            <label for='userToken'>User Token (for user-scoped settings)</label>
-            <input id='userToken' type='text' placeholder='Auto-generated and stored locally' />
-
-            <div style='margin-top:1.2rem; display:flex; gap:0.6rem; flex-wrap:wrap;'>
-                <button id='saveBtn'>Save Key</button>
-                <button id='genKeyBtn' type='button' style='background:#546e7a;'>Generate Settings Key</button>
-                <button id='genUserBtn' type='button' style='background:#00897b;'>Generate User Token</button>
-                <button id='setUserBtn' type='button' style='background:#00796b;'>Use User Token</button>
-            </div>
-            <div id='result' class='status'></div>
-            <div id='genResult' class='status'></div>
         </div>
 
         <script>
