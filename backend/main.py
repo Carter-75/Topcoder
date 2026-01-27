@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 import security_rules
 import ai_review
 import coding_standards
@@ -11,6 +12,9 @@ import policy
 import audit_log
 import config_loader
 import rule_engine
+
+# Import dashboard endpoint
+import dashboard
 
 app = FastAPI(title="Guardrails Backend API")
 
