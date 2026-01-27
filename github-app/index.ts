@@ -99,6 +99,76 @@ const summarizeFindings = (result: AnalyzeBatchResponse) => {
   return { issues, coding, license, sector, ai };
 };
 
+const buildLineIndex = (code: string) => {
+  const lineStarts = [0];
+  for (let i = 0; i < code.length; i += 1) {
+    if (code[i] === "\n") {
+      lineStarts.push(i + 1);
+    }
+  }
+  return lineStarts;
+};
+
+const offsetToLine = (lineStarts: number[], offset: number) => {
+  let low = 0;
+  let high = lineStarts.length - 1;
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    if (lineStarts[mid] <= offset) {
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+  return Math.max(1, high + 1);
+};
+
+const policyToLevel = (policy?: string) => {
+  if (policy === "blocking") return "failure";
+  if (policy === "warning") return "warning";
+  return "notice";
+};
+
+const buildAnnotations = (result: AnalyzeBatchResponse, fileCode: Record<string, string>) => {
+  const annotations: Array<any> = [];
+  for (const [path, analysis] of Object.entries(result.findings)) {
+    const code = fileCode[path];
+    if (!code) continue;
+    const lineIndex = buildLineIndex(code);
+    const allIssues = [
+      ...(analysis.issues || []),
+      ...(analysis.coding_issues || []),
+      ...(analysis.license_ip_issues || []),
+      ...(analysis.sector_issues || []),
+    ];
+    for (const issue of allIssues) {
+      let line = issue.line || null;
+      if (!line && typeof issue.start === "number") {
+        line = offsetToLine(lineIndex, issue.start);
+      }
+      if (!line) continue;
+      const messageParts = [issue.message || issue.type];
+      if (issue.suggestion) messageParts.push(`Suggestion: ${issue.suggestion}`);
+      if (issue.owasp) messageParts.push(`OWASP: ${issue.owasp}`);
+      if (issue.cwe) messageParts.push(`CWE: ${issue.cwe}`);
+      annotations.push({
+        path,
+        start_line: line,
+        end_line: line,
+        annotation_level: policyToLevel(issue.policy_level),
+        title: issue.type || "guardrails",
+        message: messageParts.join("\n"),
+      });
+    }
+  }
+  return annotations.slice(0, 50);
+};
+
+const detectCopilot = (text?: string) => {
+  if (!text) return false;
+  return /copilot/i.test(text) || /Co-authored-by:\s*GitHub Copilot/i.test(text);
+};
+
 export = (app: Probot) => {
   app.on(["pull_request.opened", "pull_request.synchronize", "pull_request.reopened"], async (context: Context) => {
     const eventPayload = context.payload as any;
@@ -108,11 +178,24 @@ export = (app: Probot) => {
     const repoName = repo.name;
     const ref = pr.head.sha;
 
+    const checkRun = await context.octokit.checks.create({
+      owner,
+      repo: repoName,
+      name: "guardrails",
+      head_sha: pr.head.sha,
+      status: "in_progress",
+      output: {
+        title: "Guardrails analysis",
+        summary: "Scan started.",
+      },
+    });
+
     const config = await fetchGuardrailsConfig(context, owner, repoName, ref);
     const sector = config.sector || "finance";
 
     const fileList = await context.octokit.pulls.listFiles({ owner, repo: repoName, pull_number: pr.number, per_page: 100 });
     const files = [] as Array<{ path: string; code: string }>;
+    const fileCode: Record<string, string> = {};
     for (const file of fileList.data) {
       if (!file.filename || file.status === "removed") {
         continue;
@@ -132,13 +215,18 @@ export = (app: Probot) => {
         if (raw.length > MAX_FILE_BYTES) {
           continue;
         }
+        fileCode[file.filename] = raw;
         files.push({ path: file.filename, code: raw });
       } catch (error) {
         continue;
       }
     }
 
+    const commits = await context.octokit.pulls.listCommits({ owner, repo: repoName, pull_number: pr.number, per_page: 100 });
+    const aiGenerated = detectCopilot(pr.title) || detectCopilot(pr.body) || commits.data.some((commit: any) => detectCopilot(commit.commit?.message));
+
     const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
+    const useAsync = process.env.USE_ASYNC_SCAN === "true";
     const requestPayload = {
       pr_number: pr.number,
       repo: repo.full_name,
@@ -146,21 +234,46 @@ export = (app: Probot) => {
       files,
       sector,
       policy: config.policy,
+      ai_generated: aiGenerated,
       repo_path: repo.full_name,
     };
-
-    const res = await fetch(`${backendUrl}/analyze-batch`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(requestPayload),
-    });
-
-    const result = (await res.json()) as AnalyzeBatchResponse;
+    let result: AnalyzeBatchResponse;
+    if (useAsync) {
+      const startRes = await fetch(`${backendUrl}/scan/async`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestPayload),
+      });
+      const startData = await startRes.json();
+      const jobId = startData.job_id;
+      let attempts = 0;
+      while (attempts < 10) {
+        const statusRes = await fetch(`${backendUrl}/scan/status/${jobId}`);
+        const statusData = await statusRes.json();
+        if (statusData.status === "completed") {
+          result = statusData.result as AnalyzeBatchResponse;
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        attempts += 1;
+      }
+      if (!result) {
+        throw new Error("Guardrails async scan timed out");
+      }
+    } else {
+      const res = await fetch(`${backendUrl}/analyze-batch`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestPayload),
+      });
+      result = (await res.json()) as AnalyzeBatchResponse;
+    }
     const { issues, coding, license, sector: sectorIssues, ai } = summarizeFindings(result);
     const labels = pr.labels?.map((label: any) => label.name) || [];
     const hasOverride = labels.includes(OVERRIDE_LABEL);
     const shouldBlock = result.policy === "blocking" && !hasOverride;
     const conclusion = shouldBlock ? "failure" : result.policy === "warning" ? "neutral" : "success";
+    const annotations = buildAnnotations(result, fileCode);
 
     const summaryLines = [
       `Policy: ${result.policy}${hasOverride ? " (override applied)" : ""}`,
@@ -179,16 +292,124 @@ export = (app: Probot) => {
       body: `## Guardrails Report\n${summaryLines.map((line) => `- ${line}`).join("\n")}`,
     });
 
-    await context.octokit.checks.create({
+    await context.octokit.checks.update({
       owner,
       repo: repoName,
-      name: "guardrails",
-      head_sha: pr.head.sha,
+      check_run_id: checkRun.data.id,
       status: "completed",
       conclusion,
       output: {
         title: "Guardrails analysis",
         summary: summaryLines.join("\n"),
+        annotations,
+      },
+    });
+  });
+
+  app.on("push", async (context: Context) => {
+    const payload = context.payload as any;
+    const repo = payload.repository;
+    const owner = repo.owner.login;
+    const repoName = repo.name;
+    const headSha = payload.after;
+
+    const checkRun = await context.octokit.checks.create({
+      owner,
+      repo: repoName,
+      name: "guardrails",
+      head_sha: headSha,
+      status: "in_progress",
+      output: {
+        title: "Guardrails analysis",
+        summary: "Scan started.",
+      },
+    });
+
+    const commit = await context.octokit.repos.getCommit({ owner, repo: repoName, ref: headSha });
+    const files = [] as Array<{ path: string; code: string }>;
+    const fileCode: Record<string, string> = {};
+    for (const file of commit.data.files || []) {
+      if (!file.filename || file.status === "removed") continue;
+      if (!isSupportedFile(file.filename)) continue;
+      if (files.length >= MAX_FILES) break;
+      try {
+        const contentRes = await context.octokit.repos.getContent({ owner, repo: repoName, path: file.filename, ref: headSha });
+        if (Array.isArray(contentRes.data) || !("content" in contentRes.data)) continue;
+        const raw = decodeContent(contentRes.data.content, contentRes.data.encoding);
+        if (raw.length > MAX_FILE_BYTES) continue;
+        fileCode[file.filename] = raw;
+        files.push({ path: file.filename, code: raw });
+      } catch (error) {
+        continue;
+      }
+    }
+
+    const aiGenerated = payload.commits?.some((commit: any) => detectCopilot(commit.message)) || false;
+    const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
+    const useAsync = process.env.USE_ASYNC_SCAN === "true";
+    const requestPayload = {
+      commit: headSha,
+      repo: repo.full_name,
+      files,
+      sector: "finance",
+      ai_generated: aiGenerated,
+      repo_path: repo.full_name,
+    };
+
+    let result: AnalyzeBatchResponse;
+    if (useAsync) {
+      const startRes = await fetch(`${backendUrl}/scan/async`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestPayload),
+      });
+      const startData = await startRes.json();
+      const jobId = startData.job_id;
+      let attempts = 0;
+      while (attempts < 10) {
+        const statusRes = await fetch(`${backendUrl}/scan/status/${jobId}`);
+        const statusData = await statusRes.json();
+        if (statusData.status === "completed") {
+          result = statusData.result as AnalyzeBatchResponse;
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        attempts += 1;
+      }
+      if (!result) {
+        throw new Error("Guardrails async scan timed out");
+      }
+    } else {
+      const res = await fetch(`${backendUrl}/analyze-batch`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestPayload),
+      });
+      result = (await res.json()) as AnalyzeBatchResponse;
+    }
+    const { issues, coding, license, sector: sectorIssues, ai } = summarizeFindings(result);
+    const conclusion = result.policy === "blocking" ? "failure" : result.policy === "warning" ? "neutral" : "success";
+    const annotations = buildAnnotations(result, fileCode);
+    const summaryLines = [
+      `Policy: ${result.policy}`,
+      `Files scanned: ${result.files_scanned}`,
+      `Security issues: ${issues}`,
+      `Coding issues: ${coding}`,
+      `License/IP issues: ${license}`,
+      `Sector issues: ${sectorIssues}`,
+      `AI suggestions: ${ai}`,
+    ];
+
+    await context.octokit.checks.update({
+      owner,
+      repo: repoName,
+      check_run_id: checkRun.data.id,
+      status: "completed",
+      conclusion,
+      output: {
+        title: "Guardrails analysis",
+        summary: summaryLines.join("\n"),
+        annotations,
       },
     });
   });
