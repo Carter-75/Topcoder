@@ -4,8 +4,12 @@ from datetime import datetime
 from typing import Dict, Any
 
 AUDIT_LOG_PATH = os.environ.get("AUDIT_LOG_PATH", "audit_log.jsonl")
+AUDIT_LOG_ENABLED = os.environ.get("AUDIT_LOG_ENABLED", "true").lower() == "true"
+AUDIT_LOG_STORE_OUTPUT = os.environ.get("AUDIT_LOG_STORE_OUTPUT", "true").lower() == "true"
 
 def write_audit_log(entry: Dict[str, Any]):
+    if not AUDIT_LOG_ENABLED:
+        return
     entry["timestamp"] = datetime.utcnow().isoformat() + "Z"
     try:
         with open(AUDIT_LOG_PATH, "a", encoding="utf-8") as f:

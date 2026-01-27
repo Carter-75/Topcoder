@@ -15,13 +15,21 @@ DEFAULT_POLICY = {
     "ip_duplication": "warning",
 }
 
-def get_policy(repo_path: str = ".") -> dict:
+def get_policy(repo_path: str = ".", policy_override: dict | None = None) -> dict:
+    if policy_override:
+        return policy_override
     config = config_loader.load_config(repo_path)
     return config.get("policy", DEFAULT_POLICY)
 
-def evaluate_policy(issues: List[Dict[str, Any]], coding_issues: List[Dict[str, Any]], license_ip_issues: List[Dict[str, Any]], repo_path: str = ".") -> str:
+def evaluate_policy(
+    issues: List[Dict[str, Any]],
+    coding_issues: List[Dict[str, Any]],
+    license_ip_issues: List[Dict[str, Any]],
+    repo_path: str = ".",
+    policy_override: dict | None = None,
+) -> str:
     all_issues = issues + coding_issues + license_ip_issues
-    policy_cfg = get_policy(repo_path)
+    policy_cfg = get_policy(repo_path, policy_override)
     mode = "advisory"
     for issue in all_issues:
         rule = issue.get("type")

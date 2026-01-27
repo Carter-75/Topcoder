@@ -1,0 +1,1616 @@
+{
+  "repo": "C:\\Users\\carte\\OneDrive\\Desktop\\Code\\Portfolio-Websites (Mostly)\\Topcoder",
+  "api": "https://topcoder-production.up.railway.app",
+  "sector": "finance",
+  "files_scanned": 28,
+  "findings": {
+    "README.md": {
+      "result": "analyzed",
+      "issues": [],
+      "coding_issues": [],
+      "license_ip_issues": [
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 24,
+          "original_line": 20,
+          "snippet": "```sh",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 27,
+          "original_line": 22,
+          "snippet": "```",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 29,
+          "original_line": 20,
+          "snippet": "```sh",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 31,
+          "original_line": 22,
+          "snippet": "```",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 35,
+          "original_line": 20,
+          "snippet": "```sh",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 38,
+          "original_line": 22,
+          "snippet": "```",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 43,
+          "original_line": 20,
+          "snippet": "```sh",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 45,
+          "original_line": 22,
+          "snippet": "```",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 49,
+          "original_line": 20,
+          "snippet": "```sh",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 51,
+          "original_line": 22,
+          "snippet": "```",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 66,
+          "original_line": 20,
+          "snippet": "```sh",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 68,
+          "original_line": 22,
+          "snippet": "```",
+          "policy_level": "warning"
+        }
+      ],
+      "sector_issues": [],
+      "ai_suggestions": [],
+      "policy": "warning",
+      "override_allowed": false
+    },
+    "start.sh": {
+      "result": "analyzed",
+      "issues": [],
+      "coding_issues": [],
+      "license_ip_issues": [],
+      "sector_issues": [],
+      "ai_suggestions": [
+        {
+          "type": "security",
+          "message": "Review input validation for user-controlled data.",
+          "explanation": "Unvalidated input can lead to security vulnerabilities.",
+          "suggestion": "Add input validation and sanitization.",
+          "severity": "advisory"
+        }
+      ],
+      "policy": "advisory",
+      "override_allowed": false
+    },
+    ".github\\workflows\\guardrails.yml": {
+      "result": "analyzed",
+      "issues": [],
+      "coding_issues": [],
+      "license_ip_issues": [],
+      "sector_issues": [],
+      "ai_suggestions": [],
+      "policy": "advisory",
+      "override_allowed": false
+    },
+    ".guardrails\\config.yml": {
+      "result": "analyzed",
+      "issues": [],
+      "coding_issues": [],
+      "license_ip_issues": [],
+      "sector_issues": [],
+      "ai_suggestions": [],
+      "policy": "advisory",
+      "override_allowed": false
+    },
+    "backend\\ai_review.py": {
+      "result": "analyzed",
+      "issues": [],
+      "coding_issues": [
+        {
+          "type": "logging_practice",
+          "message": "Use logging instead of print().",
+          "suggestion": "Replace print() with logging calls.",
+          "start": 1805,
+          "end": 1811,
+          "policy_level": "advisory"
+        },
+        {
+          "type": "logging_practice",
+          "message": "Use logging instead of print().",
+          "suggestion": "Replace print() with logging calls.",
+          "start": 2120,
+          "end": 2126,
+          "policy_level": "advisory"
+        },
+        {
+          "type": "error_handling",
+          "message": "Avoid catching broad Exception; catch specific exceptions.",
+          "suggestion": "Catch only the exceptions you expect.",
+          "start": 1450,
+          "end": 1467,
+          "policy_level": "warning"
+        }
+      ],
+      "license_ip_issues": [
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 25,
+          "original_line": 16,
+          "snippet": "}",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 31,
+          "original_line": 12,
+          "snippet": "try:",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 53,
+          "original_line": 45,
+          "snippet": "suggestions.append({",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 59,
+          "original_line": 51,
+          "snippet": "})",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 61,
+          "original_line": 45,
+          "snippet": "suggestions.append({",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 66,
+          "original_line": 50,
+          "snippet": "\"severity\": \"advisory\"",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 67,
+          "original_line": 51,
+          "snippet": "})",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 68,
+          "original_line": 36,
+          "snippet": "return suggestions",
+          "policy_level": "warning"
+        }
+      ],
+      "sector_issues": [
+        {
+          "type": "error_handling",
+          "message": "Do not suppress exceptions in payment processing.",
+          "severity": "blocking",
+          "rule_id": "FIN-002",
+          "pattern": "except:|except Exception:",
+          "policy_level": "warning"
+        }
+      ],
+      "ai_suggestions": [
+        {
+          "type": "performance",
+          "message": "Consider using logging instead of print for production code.",
+          "explanation": "Logging provides better control and is more suitable for enterprise environments.",
+          "suggestion": "Replace print() with logging calls.",
+          "severity": "advisory"
+        },
+        {
+          "type": "maintainability",
+          "message": "Avoid catching broad Exception; catch specific exceptions.",
+          "explanation": "Catching all exceptions can hide bugs and make debugging harder.",
+          "suggestion": "Catch only the exceptions you expect.",
+          "severity": "warning"
+        }
+      ],
+      "policy": "warning",
+      "override_allowed": false
+    },
+    "backend\\audit_log.py": {
+      "result": "analyzed",
+      "issues": [],
+      "coding_issues": [
+        {
+          "type": "error_handling",
+          "message": "Avoid catching broad Exception; catch specific exceptions.",
+          "suggestion": "Catch only the exceptions you expect.",
+          "start": 379,
+          "end": 396,
+          "policy_level": "warning"
+        }
+      ],
+      "license_ip_issues": [],
+      "sector_issues": [
+        {
+          "type": "error_handling",
+          "message": "Do not suppress exceptions in payment processing.",
+          "severity": "blocking",
+          "rule_id": "FIN-002",
+          "pattern": "except:|except Exception:",
+          "policy_level": "warning"
+        }
+      ],
+      "ai_suggestions": [
+        {
+          "type": "maintainability",
+          "message": "Avoid catching broad Exception; catch specific exceptions.",
+          "explanation": "Catching all exceptions can hide bugs and make debugging harder.",
+          "suggestion": "Catch only the exceptions you expect.",
+          "severity": "warning"
+        }
+      ],
+      "policy": "warning",
+      "override_allowed": false
+    },
+    "backend\\coding_standards.py": {
+      "result": "analyzed",
+      "issues": [],
+      "coding_issues": [
+        {
+          "type": "logging_practice",
+          "message": "Use logging instead of print().",
+          "suggestion": "Replace print() with logging calls.",
+          "start": 621,
+          "end": 627,
+          "policy_level": "advisory"
+        },
+        {
+          "type": "logging_practice",
+          "message": "Use logging instead of print().",
+          "suggestion": "Replace print() with logging calls.",
+          "start": 819,
+          "end": 825,
+          "policy_level": "advisory"
+        },
+        {
+          "type": "logging_practice",
+          "message": "Use logging instead of print().",
+          "suggestion": "Replace print() with logging calls.",
+          "start": 865,
+          "end": 871,
+          "policy_level": "advisory"
+        }
+      ],
+      "license_ip_issues": [
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 19,
+          "original_line": 6,
+          "snippet": "issues = []",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 21,
+          "original_line": 8,
+          "snippet": "issues.append({",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 27,
+          "original_line": 14,
+          "snippet": "})",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 28,
+          "original_line": 15,
+          "snippet": "return issues",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 32,
+          "original_line": 6,
+          "snippet": "issues = []",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 34,
+          "original_line": 8,
+          "snippet": "issues.append({",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 38,
+          "original_line": 25,
+          "snippet": "\"start\": m.start(),",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 39,
+          "original_line": 26,
+          "snippet": "\"end\": m.end()",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 40,
+          "original_line": 14,
+          "snippet": "})",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 42,
+          "original_line": 8,
+          "snippet": "issues.append({",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 43,
+          "original_line": 35,
+          "snippet": "\"type\": \"error_handling\",",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 46,
+          "original_line": 25,
+          "snippet": "\"start\": m.start(),",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 47,
+          "original_line": 26,
+          "snippet": "\"end\": m.end()",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 48,
+          "original_line": 14,
+          "snippet": "})",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 49,
+          "original_line": 15,
+          "snippet": "return issues",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 52,
+          "original_line": 6,
+          "snippet": "issues = []",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 56,
+          "original_line": 15,
+          "snippet": "return issues",
+          "policy_level": "warning"
+        }
+      ],
+      "sector_issues": [],
+      "ai_suggestions": [
+        {
+          "type": "performance",
+          "message": "Consider using logging instead of print for production code.",
+          "explanation": "Logging provides better control and is more suitable for enterprise environments.",
+          "suggestion": "Replace print() with logging calls.",
+          "severity": "advisory"
+        },
+        {
+          "type": "maintainability",
+          "message": "Avoid catching broad Exception; catch specific exceptions.",
+          "explanation": "Catching all exceptions can hide bugs and make debugging harder.",
+          "suggestion": "Catch only the exceptions you expect.",
+          "severity": "warning"
+        },
+        {
+          "type": "security",
+          "message": "Review input validation for user-controlled data.",
+          "explanation": "Unvalidated input can lead to security vulnerabilities.",
+          "suggestion": "Add input validation and sanitization.",
+          "severity": "advisory"
+        }
+      ],
+      "policy": "warning",
+      "override_allowed": false
+    },
+    "backend\\config_loader.py": {
+      "result": "analyzed",
+      "issues": [],
+      "coding_issues": [],
+      "license_ip_issues": [],
+      "sector_issues": [],
+      "ai_suggestions": [],
+      "policy": "advisory",
+      "override_allowed": false
+    },
+    "backend\\dashboard.py": {
+      "result": "analyzed",
+      "issues": [],
+      "coding_issues": [
+        {
+          "type": "error_handling",
+          "message": "Avoid catching broad Exception; catch specific exceptions.",
+          "suggestion": "Catch only the exceptions you expect.",
+          "start": 407,
+          "end": 424,
+          "policy_level": "warning"
+        },
+        {
+          "type": "error_handling",
+          "message": "Avoid catching broad Exception; catch specific exceptions.",
+          "suggestion": "Catch only the exceptions you expect.",
+          "start": 462,
+          "end": 479,
+          "policy_level": "warning"
+        }
+      ],
+      "license_ip_issues": [
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 12,
+          "original_line": 8,
+          "snippet": "try:",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 16,
+          "original_line": 14,
+          "snippet": "except Exception:",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 17,
+          "original_line": 7,
+          "snippet": "entries = []",
+          "policy_level": "warning"
+        }
+      ],
+      "sector_issues": [
+        {
+          "type": "error_handling",
+          "message": "Do not suppress exceptions in payment processing.",
+          "severity": "blocking",
+          "rule_id": "FIN-002",
+          "pattern": "except:|except Exception:",
+          "policy_level": "warning"
+        }
+      ],
+      "ai_suggestions": [
+        {
+          "type": "maintainability",
+          "message": "Avoid catching broad Exception; catch specific exceptions.",
+          "explanation": "Catching all exceptions can hide bugs and make debugging harder.",
+          "suggestion": "Catch only the exceptions you expect.",
+          "severity": "warning"
+        },
+        {
+          "type": "security",
+          "message": "Review input validation for user-controlled data.",
+          "explanation": "Unvalidated input can lead to security vulnerabilities.",
+          "suggestion": "Add input validation and sanitization.",
+          "severity": "advisory"
+        }
+      ],
+      "policy": "warning",
+      "override_allowed": false
+    },
+    "backend\\license_ip.py": {
+      "result": "analyzed",
+      "issues": [],
+      "coding_issues": [],
+      "license_ip_issues": [
+        {
+          "type": "license_detected",
+          "license": "MIT",
+          "message": "Detected MIT license header in code.",
+          "policy_level": "warning"
+        },
+        {
+          "type": "license_detected",
+          "license": "Apache-2.0",
+          "message": "Detected Apache-2.0 license header in code.",
+          "policy_level": "warning"
+        },
+        {
+          "type": "license_detected",
+          "license": "GPL",
+          "message": "Detected GPL license header in code.",
+          "policy_level": "warning"
+        },
+        {
+          "type": "license_detected",
+          "license": "MPL",
+          "message": "Detected MPL license header in code.",
+          "policy_level": "warning"
+        },
+        {
+          "type": "license_detected",
+          "license": "BSD",
+          "message": "Detected BSD license header in code.",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 27,
+          "original_line": 13,
+          "snippet": "issues = []",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 32,
+          "original_line": 16,
+          "snippet": "issues.append({",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 38,
+          "original_line": 20,
+          "snippet": "})",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 41,
+          "original_line": 21,
+          "snippet": "return issues",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 44,
+          "original_line": 13,
+          "snippet": "issues = []",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 47,
+          "original_line": 21,
+          "snippet": "return issues",
+          "policy_level": "warning"
+        }
+      ],
+      "sector_issues": [],
+      "ai_suggestions": [],
+      "policy": "warning",
+      "override_allowed": false
+    },
+    "backend\\main.py": {
+      "result": "analyzed",
+      "issues": [],
+      "coding_issues": [],
+      "license_ip_issues": [
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 59,
+          "original_line": 52,
+          "snippet": "\"policy\": policy_mode,",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 60,
+          "original_line": 53,
+          "snippet": "\"override_allowed\": override_allowed",
+          "policy_level": "warning"
+        }
+      ],
+      "sector_issues": [],
+      "ai_suggestions": [],
+      "policy": "warning",
+      "override_allowed": false
+    },
+    "backend\\policy.py": {
+      "result": "analyzed",
+      "issues": [],
+      "coding_issues": [],
+      "license_ip_issues": [],
+      "sector_issues": [],
+      "ai_suggestions": [],
+      "policy": "advisory",
+      "override_allowed": false
+    },
+    "backend\\rule_engine.py": {
+      "result": "analyzed",
+      "issues": [],
+      "coding_issues": [],
+      "license_ip_issues": [
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 29,
+          "original_line": 24,
+          "snippet": "continue",
+          "policy_level": "warning"
+        }
+      ],
+      "sector_issues": [],
+      "ai_suggestions": [],
+      "policy": "warning",
+      "override_allowed": false
+    },
+    "backend\\scan_repo.py": {
+      "result": "analyzed",
+      "issues": [],
+      "coding_issues": [],
+      "license_ip_issues": [
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 44,
+          "original_line": 17,
+          "snippet": "}",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 66,
+          "original_line": 17,
+          "snippet": "}",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 98,
+          "original_line": 17,
+          "snippet": "}",
+          "policy_level": "warning"
+        }
+      ],
+      "sector_issues": [],
+      "ai_suggestions": [
+        {
+          "type": "maintainability",
+          "message": "Avoid catching broad Exception; catch specific exceptions.",
+          "explanation": "Catching all exceptions can hide bugs and make debugging harder.",
+          "suggestion": "Catch only the exceptions you expect.",
+          "severity": "warning"
+        }
+      ],
+      "policy": "warning",
+      "override_allowed": false
+    },
+    "backend\\security_rules.py": {
+      "result": "analyzed",
+      "issues": [
+        {
+          "type": "unsafe_execution",
+          "pattern": "exec\\(",
+          "match": "exec(",
+          "start": 1748,
+          "end": 1753,
+          "cwe": "CWE-78",
+          "owasp": "A01:2021",
+          "copilot_strict": true,
+          "policy_level": "warning"
+        },
+        {
+          "type": "unsafe_execution",
+          "pattern": "exec\\(",
+          "match": "exec(",
+          "start": 3238,
+          "end": 3243,
+          "cwe": "CWE-78",
+          "owasp": "A01:2021",
+          "copilot_strict": true,
+          "policy_level": "warning"
+        },
+        {
+          "type": "copilot_generated_code",
+          "pattern": "(?i)generated by copilot",
+          "match": "generated by copilot",
+          "start": 2400,
+          "end": 2420,
+          "note": "Likely Copilot-generated code segment",
+          "copilot_strict": true,
+          "policy_level": "warning"
+        },
+        {
+          "type": "copilot_generated_code",
+          "pattern": "(?i)copilot suggestion",
+          "match": "copilot suggestion",
+          "start": 2437,
+          "end": 2455,
+          "note": "Likely Copilot-generated code segment",
+          "copilot_strict": true,
+          "policy_level": "warning"
+        },
+        {
+          "type": "copilot_generated_code",
+          "pattern": "(?i)copyright github copilot",
+          "match": "copyright github copilot",
+          "start": 2472,
+          "end": 2496,
+          "note": "Likely Copilot-generated code segment",
+          "copilot_strict": true,
+          "policy_level": "warning"
+        },
+        {
+          "type": "copilot_generated_code",
+          "pattern": "(?i)AI-generated code",
+          "match": "AI-generated code",
+          "start": 2513,
+          "end": 2530,
+          "note": "Likely Copilot-generated code segment",
+          "copilot_strict": true,
+          "policy_level": "warning"
+        },
+        {
+          "type": "copilot_generated_code",
+          "pattern": "(?i)Created with Copilot",
+          "match": "Created with Copilot",
+          "start": 2547,
+          "end": 2567,
+          "note": "Likely Copilot-generated code segment",
+          "copilot_strict": true,
+          "policy_level": "warning"
+        }
+      ],
+      "coding_issues": [],
+      "license_ip_issues": [
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 25,
+          "original_line": 5,
+          "snippet": "patterns = [",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 27,
+          "original_line": 9,
+          "snippet": "]",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 28,
+          "original_line": 10,
+          "snippet": "issues = []",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 29,
+          "original_line": 11,
+          "snippet": "for pat in patterns:",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 31,
+          "original_line": 13,
+          "snippet": "issues.append({",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 33,
+          "original_line": 15,
+          "snippet": "\"pattern\": pat,",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 34,
+          "original_line": 16,
+          "snippet": "\"match\": m.group(0),",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 35,
+          "original_line": 17,
+          "snippet": "\"start\": m.start(),",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 36,
+          "original_line": 18,
+          "snippet": "\"end\": m.end(),",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 39,
+          "original_line": 21,
+          "snippet": "})",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 40,
+          "original_line": 22,
+          "snippet": "return issues",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 43,
+          "original_line": 5,
+          "snippet": "patterns = [",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 47,
+          "original_line": 9,
+          "snippet": "]",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 48,
+          "original_line": 10,
+          "snippet": "issues = []",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 49,
+          "original_line": 11,
+          "snippet": "for pat in patterns:",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 50,
+          "original_line": 12,
+          "snippet": "for m in re.finditer(pat, code):",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 51,
+          "original_line": 13,
+          "snippet": "issues.append({",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 53,
+          "original_line": 15,
+          "snippet": "\"pattern\": pat,",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 54,
+          "original_line": 16,
+          "snippet": "\"match\": m.group(0),",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 55,
+          "original_line": 17,
+          "snippet": "\"start\": m.start(),",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 56,
+          "original_line": 18,
+          "snippet": "\"end\": m.end(),",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 59,
+          "original_line": 21,
+          "snippet": "})",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 60,
+          "original_line": 22,
+          "snippet": "return issues",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 63,
+          "original_line": 5,
+          "snippet": "patterns = [",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 67,
+          "original_line": 9,
+          "snippet": "]",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 68,
+          "original_line": 10,
+          "snippet": "issues = []",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 69,
+          "original_line": 11,
+          "snippet": "for pat in patterns:",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 70,
+          "original_line": 12,
+          "snippet": "for m in re.finditer(pat, code):",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 71,
+          "original_line": 13,
+          "snippet": "issues.append({",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 73,
+          "original_line": 15,
+          "snippet": "\"pattern\": pat,",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 74,
+          "original_line": 16,
+          "snippet": "\"match\": m.group(0),",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 75,
+          "original_line": 17,
+          "snippet": "\"start\": m.start(),",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 76,
+          "original_line": 18,
+          "snippet": "\"end\": m.end(),",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 79,
+          "original_line": 21,
+          "snippet": "})",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 80,
+          "original_line": 22,
+          "snippet": "return issues",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 89,
+          "original_line": 9,
+          "snippet": "]",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 92,
+          "original_line": 12,
+          "snippet": "for m in re.finditer(pat, code):",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 94,
+          "original_line": 17,
+          "snippet": "\"start\": m.start(),",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 95,
+          "original_line": 18,
+          "snippet": "\"end\": m.end(),",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 96,
+          "original_line": 15,
+          "snippet": "\"pattern\": pat,",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 98,
+          "original_line": 21,
+          "snippet": "})",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 102,
+          "original_line": 10,
+          "snippet": "issues = []",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 122,
+          "original_line": 22,
+          "snippet": "return issues",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 123,
+          "original_line": 119,
+          "snippet": "if is_copilot:",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 124,
+          "original_line": 120,
+          "snippet": "for issue in issues:",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 125,
+          "original_line": 121,
+          "snippet": "issue[\"copilot_strict\"] = True",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 126,
+          "original_line": 22,
+          "snippet": "return issues",
+          "policy_level": "warning"
+        }
+      ],
+      "sector_issues": [],
+      "ai_suggestions": [],
+      "policy": "warning",
+      "override_allowed": false
+    },
+    "backend\\.pytest_cache\\README.md": {
+      "result": "analyzed",
+      "issues": [],
+      "coding_issues": [],
+      "license_ip_issues": [],
+      "sector_issues": [],
+      "ai_suggestions": [],
+      "policy": "advisory",
+      "override_allowed": false
+    },
+    "backend\\rulepacks\\finance.yml": {
+      "result": "analyzed",
+      "issues": [],
+      "coding_issues": [
+        {
+          "type": "error_handling",
+          "message": "Avoid bare except; catch specific exceptions.",
+          "suggestion": "Specify the exception type.",
+          "start": 336,
+          "end": 343,
+          "policy_level": "warning"
+        },
+        {
+          "type": "error_handling",
+          "message": "Avoid catching broad Exception; catch specific exceptions.",
+          "suggestion": "Catch only the exceptions you expect.",
+          "start": 344,
+          "end": 361,
+          "policy_level": "warning"
+        }
+      ],
+      "license_ip_issues": [
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 12,
+          "original_line": 7,
+          "snippet": "severity: blocking",
+          "policy_level": "warning"
+        }
+      ],
+      "sector_issues": [
+        {
+          "type": "logging_practice",
+          "message": "All financial transactions must be logged with transaction ID.",
+          "severity": "blocking",
+          "rule_id": "FIN-001",
+          "pattern": "transaction_id",
+          "policy_level": "advisory"
+        },
+        {
+          "type": "error_handling",
+          "message": "Do not suppress exceptions in payment processing.",
+          "severity": "blocking",
+          "rule_id": "FIN-002",
+          "pattern": "except:|except Exception:",
+          "policy_level": "warning"
+        }
+      ],
+      "ai_suggestions": [
+        {
+          "type": "maintainability",
+          "message": "Avoid catching broad Exception; catch specific exceptions.",
+          "explanation": "Catching all exceptions can hide bugs and make debugging harder.",
+          "suggestion": "Catch only the exceptions you expect.",
+          "severity": "warning"
+        }
+      ],
+      "policy": "warning",
+      "override_allowed": false
+    },
+    "backend\\rulepacks\\healthcare.yml": {
+      "result": "analyzed",
+      "issues": [],
+      "coding_issues": [],
+      "license_ip_issues": [],
+      "sector_issues": [],
+      "ai_suggestions": [],
+      "policy": "advisory",
+      "override_allowed": false
+    },
+    "backend\\rulepacks\\public_sector.yml": {
+      "result": "analyzed",
+      "issues": [],
+      "coding_issues": [],
+      "license_ip_issues": [],
+      "sector_issues": [],
+      "ai_suggestions": [],
+      "policy": "advisory",
+      "override_allowed": false
+    },
+    "backend\\tests\\test_coding_standards.py": {
+      "result": "analyzed",
+      "issues": [],
+      "coding_issues": [
+        {
+          "type": "naming_convention",
+          "message": "Function 'BadFunctionName' should be snake_case.",
+          "suggestion": "Rename to snake_case.",
+          "start": 175,
+          "end": 190,
+          "policy_level": "advisory"
+        },
+        {
+          "type": "logging_practice",
+          "message": "Use logging instead of print().",
+          "suggestion": "Replace print() with logging calls.",
+          "start": 365,
+          "end": 371,
+          "policy_level": "advisory"
+        }
+      ],
+      "license_ip_issues": [
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 13,
+          "original_line": 8,
+          "snippet": "issues = coding_standards.run_coding_standards_rules(code)",
+          "policy_level": "warning"
+        }
+      ],
+      "sector_issues": [],
+      "ai_suggestions": [
+        {
+          "type": "performance",
+          "message": "Consider using logging instead of print for production code.",
+          "explanation": "Logging provides better control and is more suitable for enterprise environments.",
+          "suggestion": "Replace print() with logging calls.",
+          "severity": "advisory"
+        },
+        {
+          "type": "security",
+          "message": "Review input validation for user-controlled data.",
+          "explanation": "Unvalidated input can lead to security vulnerabilities.",
+          "suggestion": "Add input validation and sanitization.",
+          "severity": "advisory"
+        }
+      ],
+      "policy": "warning",
+      "override_allowed": false
+    },
+    "backend\\tests\\test_license_ip.py": {
+      "result": "analyzed",
+      "issues": [],
+      "coding_issues": [],
+      "license_ip_issues": [
+        {
+          "type": "license_detected",
+          "license": "MIT",
+          "message": "Detected MIT license header in code.",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 13,
+          "original_line": 8,
+          "snippet": "issues = license_ip.run_license_ip_checks(code)",
+          "policy_level": "warning"
+        }
+      ],
+      "sector_issues": [],
+      "ai_suggestions": [
+        {
+          "type": "security",
+          "message": "Review input validation for user-controlled data.",
+          "explanation": "Unvalidated input can lead to security vulnerabilities.",
+          "suggestion": "Add input validation and sanitization.",
+          "severity": "advisory"
+        }
+      ],
+      "policy": "warning",
+      "override_allowed": false
+    },
+    "backend\\tests\\test_security_rules.py": {
+      "result": "analyzed",
+      "issues": [
+        {
+          "type": "hardcoded_secret",
+          "pattern": "api_key\\s*=\\s*['\\\"]\\w{8,}['\\\"]",
+          "match": "api_key = \"1234567890abcdef\"",
+          "start": 168,
+          "end": 196,
+          "cwe": "CWE-798",
+          "owasp": "A02:2021",
+          "policy_level": "blocking"
+        },
+        {
+          "type": "sql_injection_risk",
+          "pattern": "execute\\s*\\(.*\\+.*\\)",
+          "match": "execute(\"SELECT * FROM users WHERE name = \" + user_input)",
+          "start": 361,
+          "end": 418,
+          "cwe": "CWE-89",
+          "owasp": "A03:2021",
+          "policy_level": "blocking"
+        }
+      ],
+      "coding_issues": [],
+      "license_ip_issues": [
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 13,
+          "original_line": 8,
+          "snippet": "issues = security_rules.run_security_rules(code)",
+          "policy_level": "warning"
+        }
+      ],
+      "sector_issues": [],
+      "ai_suggestions": [],
+      "policy": "blocking",
+      "override_allowed": true
+    },
+    "docs\\architecture.md": {
+      "result": "analyzed",
+      "issues": [],
+      "coding_issues": [],
+      "license_ip_issues": [],
+      "sector_issues": [],
+      "ai_suggestions": [],
+      "policy": "advisory",
+      "override_allowed": false
+    },
+    "docs\\dashboard.md": {
+      "result": "analyzed",
+      "issues": [],
+      "coding_issues": [],
+      "license_ip_issues": [],
+      "sector_issues": [],
+      "ai_suggestions": [],
+      "policy": "advisory",
+      "override_allowed": false
+    },
+    "github-app\\index.ts": {
+      "result": "analyzed",
+      "issues": [],
+      "coding_issues": [],
+      "license_ip_issues": [
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 33,
+          "original_line": 25,
+          "snippet": "});",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 36,
+          "original_line": 29,
+          "snippet": "owner: repo.owner.login,",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 37,
+          "original_line": 30,
+          "snippet": "repo: repo.name,",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 42,
+          "original_line": 25,
+          "snippet": "});",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 43,
+          "original_line": 25,
+          "snippet": "});",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 44,
+          "original_line": 18,
+          "snippet": "};",
+          "policy_level": "warning"
+        }
+      ],
+      "sector_issues": [],
+      "ai_suggestions": [
+        {
+          "type": "security",
+          "message": "Review input validation for user-controlled data.",
+          "explanation": "Unvalidated input can lead to security vulnerabilities.",
+          "suggestion": "Add input validation and sanitization.",
+          "severity": "advisory"
+        }
+      ],
+      "policy": "warning",
+      "override_allowed": false
+    },
+    "github-app\\package.json": {
+      "result": "analyzed",
+      "issues": [],
+      "coding_issues": [],
+      "license_ip_issues": [
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 13,
+          "original_line": 9,
+          "snippet": "},",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 18,
+          "original_line": 17,
+          "snippet": "}",
+          "policy_level": "warning"
+        }
+      ],
+      "sector_issues": [],
+      "ai_suggestions": [],
+      "policy": "warning",
+      "override_allowed": false
+    },
+    "github-app\\tsconfig.json": {
+      "result": "analyzed",
+      "issues": [],
+      "coding_issues": [],
+      "license_ip_issues": [],
+      "sector_issues": [],
+      "ai_suggestions": [],
+      "policy": "advisory",
+      "override_allowed": false
+    },
+    "github-app\\test\\github-app.test.ts": {
+      "result": "analyzed",
+      "issues": [],
+      "coding_issues": [],
+      "license_ip_issues": [
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 15,
+          "original_line": 13,
+          "snippet": "});",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 28,
+          "original_line": 13,
+          "snippet": "});",
+          "policy_level": "warning"
+        },
+        {
+          "type": "ip_duplication",
+          "message": "Possible duplicate or copied code detected.",
+          "line": 29,
+          "original_line": 13,
+          "snippet": "});",
+          "policy_level": "warning"
+        }
+      ],
+      "sector_issues": [],
+      "ai_suggestions": [],
+      "policy": "warning",
+      "override_allowed": false
+    }
+  },
+  "errors": {}
+}
