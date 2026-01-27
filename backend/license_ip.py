@@ -1,29 +1,45 @@
+import os
 import re
 from typing import List, Dict, Any
 
 import config_loader
 
+LICENSE_PATTERNS = [
+    (r"SPDX-License-Identifier:\s*([A-Za-z0-9\.-]+)", "spdx"),
+    (r"MIT License", "MIT"),
+    (r"Apache License, Version 2.0", "Apache-2.0"),
+    (r"GNU GENERAL PUBLIC LICENSE", "GPL"),
+    (r"GNU AFFERO GENERAL PUBLIC LICENSE", "AGPL"),
+    (r"Server Side Public License", "SSPL"),
+    (r"Business Source License", "BUSL"),
+    (r"Elastic License", "Elastic-2.0"),
+    (r"Commons Clause", "Commons-Clause"),
+    (r"Mozilla Public License", "MPL"),
+    (r"BSD License", "BSD"),
+]
+
+LICENSE_FILES = {
+    "LICENSE",
+    "LICENSE.txt",
+    "LICENSE.md",
+    "COPYING",
+    "COPYING.txt",
+    "NOTICE",
+    "NOTICE.txt",
+}
+
 def detect_license_headers(code: str) -> List[Dict[str, Any]]:
-    # Heuristic: Look for common open source license headers
-    licenses = [
-        (r"MIT License", "MIT"),
-        (r"Apache License, Version 2.0", "Apache-2.0"),
-        (r"GNU GENERAL PUBLIC LICENSE", "GPL"),
-        (r"GNU AFFERO GENERAL PUBLIC LICENSE", "AGPL"),
-        (r"Server Side Public License", "SSPL"),
-        (r"Business Source License", "BUSL"),
-        (r"Elastic License", "Elastic-2.0"),
-        (r"Commons Clause", "Commons-Clause"),
-        (r"Mozilla Public License", "MPL"),
-        (r"BSD License", "BSD"),
-    ]
+    # Heuristic: Look for common open source license headers and SPDX identifiers
     issues = []
-    for pat, name in licenses:
-        if re.search(pat, code, re.IGNORECASE):
+    for pat, name in LICENSE_PATTERNS:
+        for match in re.finditer(pat, code, re.IGNORECASE):
+            license_name = name
+            if name == "spdx":
+                license_name = match.group(1)
             issues.append({
                 "type": "license_detected",
-                "license": name,
-                "message": f"Detected {name} license header in code.",
+                "license": license_name,
+                "message": f"Detected {license_name} license identifier in code.",
                 "severity": "warning",
             })
     return issues
@@ -81,6 +97,61 @@ def detect_restricted_licenses(code: str, restricted: list[str]) -> List[Dict[st
                 "message": f"Restricted license detected: {license_name}.",
                 "severity": "blocking",
             })
+    return issues
+
+def scan_repo_licenses(repo_path: str) -> List[str]:
+    if not repo_path or not os.path.isdir(repo_path):
+        return []
+    detected: List[str] = []
+    for root, _, files in os.walk(repo_path):
+        for name in files:
+            if name not in LICENSE_FILES:
+                continue
+            path = os.path.join(root, name)
+            try:
+                with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                    content = f.read()
+                for pat, lic in LICENSE_PATTERNS:
+                    for match in re.finditer(pat, content, re.IGNORECASE):
+                        license_name = lic
+                        if lic == "spdx":
+                            license_name = match.group(1)
+                        if license_name not in detected:
+                            detected.append(license_name)
+            except Exception:
+                continue
+    return detected
+
+def detect_cross_file_duplicates(
+    file_map: Dict[str, str],
+    min_lines: int = 6,
+    min_chars: int = 240,
+) -> Dict[str, List[Dict[str, Any]]]:
+    issues: Dict[str, List[Dict[str, Any]]] = {}
+    fingerprints: Dict[int, tuple[str, int, str]] = {}
+    for path, code in file_map.items():
+        lines = [line.rstrip() for line in code.splitlines()]
+        for i in range(0, max(0, len(lines) - min_lines + 1)):
+            window = "\n".join(lines[i:i + min_lines]).strip()
+            if len(window) < min_chars:
+                continue
+            fingerprint = hash(window)
+            if fingerprint in fingerprints:
+                other_path, other_line, snippet = fingerprints[fingerprint]
+                if other_path == path:
+                    continue
+                issue = {
+                    "type": "ip_cross_file_duplicate",
+                    "message": "Possible duplicated code block across files.",
+                    "line": i + 1,
+                    "original_file": other_path,
+                    "original_line": other_line,
+                    "snippet": snippet,
+                    "severity": "warning",
+                }
+                issues.setdefault(path, []).append(issue)
+            else:
+                fingerprints[fingerprint] = (path, i + 1, window[:80] + ("..." if len(window) > 80 else ""))
     return issues
 
 def run_license_ip_checks(code: str, repo_path: str = ".") -> List[Dict[str, Any]]:

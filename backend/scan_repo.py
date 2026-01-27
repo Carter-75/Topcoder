@@ -66,6 +66,8 @@ def analyze_batch(
     repo_path: str,
     api_key: str | None,
     require_ai_review: bool | None,
+    ai_model: str | None,
+    ai_review_max_chars: int | None,
     user_key: str | None,
 ) -> Dict[str, Any]:
     payload = {
@@ -73,6 +75,8 @@ def analyze_batch(
         "sector": sector,
         "repo_path": repo_path,
         "require_ai_review": require_ai_review,
+        "ai_model": ai_model,
+        "ai_review_max_chars": ai_review_max_chars,
     }
     headers = {}
     if api_key:
@@ -101,6 +105,8 @@ def main(argv: List[str] | None = None) -> int:
     parser.add_argument("--extensions", default=",".join(sorted(DEFAULT_EXTENSIONS)), help="Comma-separated file extensions")
     parser.add_argument("--exclude-dirs", default=",".join(sorted(DEFAULT_EXCLUDE_DIRS)), help="Comma-separated directory names to skip")
     parser.add_argument("--api-key", default=os.environ.get("OPENAI_API_KEY", ""), help="OpenAI API key (or set OPENAI_API_KEY)")
+    parser.add_argument("--ai-model", default=os.environ.get("OPENAI_MODEL", ""), help="AI model override (or set OPENAI_MODEL)")
+    parser.add_argument("--ai-max-chars", type=int, default=0, help="AI review max chars override (or set AI_REVIEW_MAX_CHARS)")
     parser.add_argument("--user", default=os.environ.get("GUARDRAILS_USER", ""), help="User token for scoped settings")
     parser.add_argument("--chunk-size", type=int, default=25, help="Number of files per batch request")
     parser.add_argument("--autofix", action="store_true", help="Apply safe autofixes to local files")
@@ -111,6 +117,8 @@ def main(argv: List[str] | None = None) -> int:
 
     repo_path = os.path.abspath(args.repo)
     api_key = args.api_key.strip()
+    ai_model = args.ai_model.strip()
+    ai_review_max_chars = args.ai_max_chars if args.ai_max_chars > 0 else 0
     user_key = args.user.strip() or None
     require_ai_review = None
 
@@ -162,6 +170,10 @@ def main(argv: List[str] | None = None) -> int:
                         raise RuntimeError("Missing user token for user-scoped settings.")
                 if isinstance(data.get("autofix_default"), bool):
                     autofix_enabled = data["autofix_default"]
+                if not ai_model and isinstance(data.get("ai_model"), str):
+                    ai_model = data["ai_model"]
+                if ai_review_max_chars <= 0 and isinstance(data.get("ai_review_max_chars"), int):
+                    ai_review_max_chars = data["ai_review_max_chars"]
         except Exception:
             autofix_enabled = None
         if autofix_enabled is None:
@@ -212,7 +224,17 @@ def main(argv: List[str] | None = None) -> int:
             batch.append((rel_path, code))
             batch_paths.append(rel_path)
             if len(batch) >= args.chunk_size:
-                findings = analyze_batch(args.api, batch, args.sector, repo_path, api_key or None, require_ai_review, user_key)
+                findings = analyze_batch(
+                    args.api,
+                    batch,
+                    args.sector,
+                    repo_path,
+                    api_key or None,
+                    require_ai_review,
+                    ai_model or None,
+                    ai_review_max_chars if ai_review_max_chars > 0 else None,
+                    user_key,
+                )
                 for file_path, file_findings in findings.get("findings", {}).items():
                     results["findings"][file_path] = file_findings
                     results["files_scanned"] += 1
@@ -223,7 +245,17 @@ def main(argv: List[str] | None = None) -> int:
 
     if batch:
         try:
-            findings = analyze_batch(args.api, batch, args.sector, repo_path, api_key or None, require_ai_review, user_key)
+            findings = analyze_batch(
+                args.api,
+                batch,
+                args.sector,
+                repo_path,
+                api_key or None,
+                require_ai_review,
+                ai_model or None,
+                ai_review_max_chars if ai_review_max_chars > 0 else None,
+                user_key,
+            )
             for file_path, file_findings in findings.get("findings", {}).items():
                 results["findings"][file_path] = file_findings
                 results["files_scanned"] += 1

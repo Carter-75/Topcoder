@@ -18,6 +18,8 @@ DEFAULT_POLICY = {
     "restricted_license": "blocking",
     "ip_duplication": "warning",
     "ip_near_duplicate": "warning",
+    "ip_cross_file_duplicate": "warning",
+    "repo_license_detected": "warning",
 }
 
 def get_policy(repo_path: str = ".", policy_override: dict | None = None) -> dict:
@@ -53,5 +55,7 @@ def evaluate_policy(
             mode = "warning"
     return mode
 
-def is_override_allowed() -> bool:
-    return True
+def is_override_allowed(repo_path: str = ".") -> bool:
+    config = config_loader.load_config(repo_path)
+    override_allowed = config.get("override_allowed", True)
+    return bool(override_allowed)

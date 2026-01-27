@@ -9,6 +9,9 @@ This project is a secure, modular backend for code analysis, policy enforcement,
 - Audit dashboard (`/dashboard`)
 - Modular rulepacks for different sectors
 - Security, coding standards, license/IP, and AI review checks
+- Repo license detection (local scans)
+- Cross-file duplicate code detection (batch scans)
+- AI review with PR/commit context when available
 
 ## Requirements
 - Python 3.9+

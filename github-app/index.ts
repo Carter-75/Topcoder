@@ -13,6 +13,7 @@ type AnalyzeBatchResponse = {
   findings: Record<string, any>;
   policy: "advisory" | "warning" | "blocking";
   override_allowed: boolean;
+  repo_license_issues?: Array<any>;
 };
 
 const MAX_FILES = Number(process.env.MAX_FILES || 100);
@@ -60,6 +61,37 @@ const decodeContent = (content: string, encoding?: string) => {
   return content;
 };
 
+const detectLanguage = (path: string) => {
+  const ext = path.slice(path.lastIndexOf(".") + 1).toLowerCase();
+  const map: Record<string, string> = {
+    py: "python",
+    js: "javascript",
+    ts: "typescript",
+    jsx: "javascript",
+    tsx: "typescript",
+    java: "java",
+    go: "go",
+    rs: "rust",
+    cs: "csharp",
+    cpp: "cpp",
+    c: "c",
+    h: "c",
+    hpp: "cpp",
+    html: "html",
+    css: "css",
+    scss: "scss",
+    md: "markdown",
+    yml: "yaml",
+    yaml: "yaml",
+    json: "json",
+    toml: "toml",
+    ini: "ini",
+    sh: "shell",
+    ps1: "powershell",
+  };
+  return map[ext] || "unknown";
+};
+
 const fetchGuardrailsConfig = async (context: Context, owner: string, repo: string, ref: string): Promise<GuardrailsConfig> => {
   const candidates = [
     ".guardrails/config.yml",
@@ -97,7 +129,8 @@ const summarizeFindings = (result: AnalyzeBatchResponse) => {
     sector += file.sector_issues?.length || 0;
     ai += file.ai_suggestions?.length || 0;
   }
-  return { issues, coding, license, sector, ai };
+  const repoLicense = result.repo_license_issues?.length || 0;
+  return { issues, coding, license, sector, ai, repoLicense };
 };
 
 const collectAiHighlights = (result: AnalyzeBatchResponse, limit = 6) => {
@@ -280,7 +313,7 @@ export = (app: Probot) => {
     const sector = config.sector || "finance";
 
     const fileList = await context.octokit.pulls.listFiles({ owner, repo: repoName, pull_number: pr.number, per_page: 100 });
-    const files = [] as Array<{ path: string; code: string }>;
+    const files = [] as Array<{ path: string; code: string; patch?: string; language?: string }>;
     const fileCode: Record<string, string> = {};
     const diffLines: Record<string, Set<number>> = {};
     for (const file of fileList.data) {
@@ -304,7 +337,12 @@ export = (app: Probot) => {
         }
         fileCode[file.filename] = raw;
         diffLines[file.filename] = buildDiffLineIndex(file.patch || "");
-        files.push({ path: file.filename, code: raw });
+        files.push({
+          path: file.filename,
+          code: raw,
+          patch: file.patch || "",
+          language: detectLanguage(file.filename),
+        });
       } catch (error) {
         continue;
       }
@@ -356,7 +394,7 @@ export = (app: Probot) => {
       });
       result = (await res.json()) as AnalyzeBatchResponse;
     }
-    const { issues, coding, license, sector: sectorIssues, ai } = summarizeFindings(result);
+    const { issues, coding, license, sector: sectorIssues, ai, repoLicense } = summarizeFindings(result);
     const labels = pr.labels?.map((label: any) => label.name) || [];
     const hasOverride = labels.includes(OVERRIDE_LABEL);
     const shouldBlock = result.policy === "blocking" && !hasOverride;
@@ -382,6 +420,7 @@ export = (app: Probot) => {
       `Security issues: ${issues}`,
       `Coding issues: ${coding}`,
       `License/IP issues: ${license}`,
+      `Repo license issues: ${repoLicense}`,
       `Sector issues: ${sectorIssues}`,
       `AI suggestions: ${ai}`,
     ];
@@ -441,7 +480,7 @@ export = (app: Probot) => {
     });
 
     const commit = await context.octokit.repos.getCommit({ owner, repo: repoName, ref: headSha });
-    const files = [] as Array<{ path: string; code: string }>;
+    const files = [] as Array<{ path: string; code: string; patch?: string; language?: string }>;
     const fileCode: Record<string, string> = {};
     for (const file of commit.data.files || []) {
       if (!file.filename || file.status === "removed") continue;
@@ -453,7 +492,12 @@ export = (app: Probot) => {
         const raw = decodeContent(contentRes.data.content, contentRes.data.encoding);
         if (raw.length > MAX_FILE_BYTES) continue;
         fileCode[file.filename] = raw;
-        files.push({ path: file.filename, code: raw });
+        files.push({
+          path: file.filename,
+          code: raw,
+          patch: file.patch || "",
+          language: detectLanguage(file.filename),
+        });
       } catch (error) {
         continue;
       }
@@ -502,7 +546,7 @@ export = (app: Probot) => {
       });
       result = (await res.json()) as AnalyzeBatchResponse;
     }
-    const { issues, coding, license, sector: sectorIssues, ai } = summarizeFindings(result);
+    const { issues, coding, license, sector: sectorIssues, ai, repoLicense } = summarizeFindings(result);
     const conclusion = result.policy === "blocking" ? "failure" : result.policy === "warning" ? "neutral" : "success";
     const annotations = buildAnnotations(result, fileCode);
     const summaryLines = [
@@ -511,6 +555,7 @@ export = (app: Probot) => {
       `Security issues: ${issues}`,
       `Coding issues: ${coding}`,
       `License/IP issues: ${license}`,
+      `Repo license issues: ${repoLicense}`,
       `Sector issues: ${sectorIssues}`,
       `AI suggestions: ${ai}`,
     ];

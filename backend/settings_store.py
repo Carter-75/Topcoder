@@ -111,3 +111,31 @@ def save_autofix_default(value: bool, user_key: str | None = None) -> bool:
     settings = load_user_settings(user_key)
     settings["autofix_default"] = value
     return save_user_settings(user_key, settings)
+
+
+def load_ai_model(user_key: str | None = None) -> Optional[str]:
+    settings = load_user_settings(user_key)
+    value = settings.get("ai_model")
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
+def save_ai_model(value: str, user_key: str | None = None) -> bool:
+    settings = load_user_settings(user_key)
+    settings["ai_model"] = value.strip()
+    return save_user_settings(user_key, settings)
+
+
+def load_ai_review_max_chars(user_key: str | None = None) -> Optional[int]:
+    settings = load_user_settings(user_key)
+    value = settings.get("ai_review_max_chars")
+    if isinstance(value, int) and value > 0:
+        return value
+    return None
+
+
+def save_ai_review_max_chars(value: int, user_key: str | None = None) -> bool:
+    settings = load_user_settings(user_key)
+    settings["ai_review_max_chars"] = value
+    return save_user_settings(user_key, settings)

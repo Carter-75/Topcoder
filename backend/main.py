@@ -5,7 +5,7 @@ import sys
 import os
 import re
 import uuid
-from typing import Dict, Any
+from typing import Dict, Any, List
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import security_rules
@@ -28,6 +28,8 @@ APP_SETTINGS: Dict[str, Any] = {
     "openai_api_key": settings_store.load_api_key(),
     "require_ai_review_default": settings_store.load_require_ai_review_default(),
     "autofix_default": settings_store.load_autofix_default(),
+    "ai_model": settings_store.load_ai_model(),
+    "ai_review_max_chars": settings_store.load_ai_review_max_chars(),
 }
 
 def _resolve_sector(data: dict, repo_path: str) -> str:
@@ -99,6 +101,35 @@ def _resolve_require_ai_review(data: dict, request: Request | None = None) -> bo
         return os.environ.get("REQUIRE_AI_REVIEW", "true").lower() == "true"
     return os.environ.get("REQUIRE_AI_REVIEW_DEFAULT", "false").lower() == "true"
 
+def _resolve_ai_model(data: dict, request: Request | None = None) -> str | None:
+    if isinstance(data.get("ai_model"), str) and data.get("ai_model").strip():
+        return data.get("ai_model").strip()
+    if request is not None:
+        user_key = _get_user_scope_key(request)
+        stored = settings_store.load_ai_model(user_key)
+        if stored:
+            return stored
+    if isinstance(APP_SETTINGS.get("ai_model"), str) and _is_global_scope():
+        return APP_SETTINGS["ai_model"]
+    return os.environ.get("OPENAI_MODEL")
+
+def _resolve_ai_review_max_chars(data: dict, request: Request | None = None) -> int | None:
+    value = data.get("ai_review_max_chars")
+    if isinstance(value, int) and value > 0:
+        return value
+    if request is not None:
+        user_key = _get_user_scope_key(request)
+        stored = settings_store.load_ai_review_max_chars(user_key)
+        if isinstance(stored, int) and stored > 0:
+            return stored
+    stored_app = APP_SETTINGS.get("ai_review_max_chars")
+    if isinstance(stored_app, int) and stored_app > 0 and _is_global_scope():
+        return stored_app
+    env_value = os.environ.get("AI_REVIEW_MAX_CHARS")
+    if env_value and env_value.isdigit():
+        return int(env_value)
+    return None
+
 def _summarize_output(output: dict) -> dict:
     return {
         "policy": output.get("policy"),
@@ -109,6 +140,7 @@ def _summarize_output(output: dict) -> dict:
             "license_ip": len(output.get("license_ip_issues", [])),
             "sector": len(output.get("sector_issues", [])),
             "ai": len(output.get("ai_suggestions", [])),
+            "repo_license": len(output.get("repo_license_issues", [])),
         },
     }
 
@@ -132,6 +164,29 @@ def _enforce_data_residency(repo_path: str) -> str | None:
         return f"Repository requires data residency '{desired}', but server is '{enforced}'."
     return None
 
+def _collect_repo_license_issues(repo_path: str) -> List[Dict[str, Any]]:
+    if not repo_path or not os.path.isdir(repo_path):
+        return []
+    config = config_loader.load_config(repo_path)
+    restricted = config.get("restricted_licenses", ["GPL", "AGPL", "SSPL", "Elastic-2.0", "Commons-Clause"])
+    detected = license_ip.scan_repo_licenses(repo_path)
+    issues = []
+    for license_name in detected:
+        issues.append({
+            "type": "repo_license_detected",
+            "license": license_name,
+            "message": f"Repository license detected: {license_name}.",
+            "severity": "warning",
+        })
+        if isinstance(restricted, list) and any(license_name.lower() == item.lower() for item in restricted):
+            issues.append({
+                "type": "restricted_license",
+                "license": license_name,
+                "message": f"Restricted license detected in repository: {license_name}.",
+                "severity": "blocking",
+            })
+    return issues
+
 def _analyze_code(
     code: str,
     sector: str,
@@ -140,11 +195,25 @@ def _analyze_code(
     ai_key: str | None = None,
     require_ai_review: bool | None = None,
     ai_generated: bool = False,
+    ai_context: dict | None = None,
+    extra_license_ip_issues: List[Dict[str, Any]] | None = None,
+    repo_license_issues: List[Dict[str, Any]] | None = None,
+    ai_model: str | None = None,
+    ai_review_max_chars: int | None = None,
 ) -> dict:
     issues = security_rules.run_security_rules(code, ai_generated=ai_generated)
     coding_issues = coding_standards.run_coding_standards_rules(code, repo_path=repo_path)
     license_ip_issues = license_ip.run_license_ip_checks(code, repo_path=repo_path)
-    ai_suggestions = ai_review.ai_review(code, api_key_override=ai_key, require_ai_override=require_ai_review)
+    if extra_license_ip_issues:
+        license_ip_issues.extend(extra_license_ip_issues)
+    ai_suggestions = ai_review.ai_review(
+        code,
+        api_key_override=ai_key,
+        require_ai_override=require_ai_review,
+        context=ai_context,
+        model_override=ai_model,
+        max_chars_override=ai_review_max_chars,
+    )
     if any(suggestion.get("type") == "ai_review_missing_key" for suggestion in ai_suggestions):
         issues.append({
             "type": "ai_review_missing_key",
@@ -157,11 +226,11 @@ def _analyze_code(
     policy_mode = policy.evaluate_policy(
         issues,
         coding_issues,
-        license_ip_issues + sector_issues,
+        license_ip_issues + sector_issues + (repo_license_issues or []),
         repo_path=repo_path,
         policy_override=policy_override,
     )
-    override_allowed = policy.is_override_allowed() if policy_mode == "blocking" else False
+    override_allowed = policy.is_override_allowed(repo_path) if policy_mode == "blocking" else False
     return {
         "issues": issues,
         "coding_issues": coding_issues,
@@ -320,11 +389,15 @@ def get_settings(request: Request, response: FastAPIResponse):
     stored_key = settings_store.load_api_key(user_key)
     stored_ai = settings_store.load_require_ai_review_default(user_key)
     stored_autofix = settings_store.load_autofix_default(user_key)
+    stored_model = settings_store.load_ai_model(user_key)
+    stored_max_chars = settings_store.load_ai_review_max_chars(user_key)
     return {
         "openai_api_key_set": bool(stored_key) if not _is_global_scope() else bool(stored_key or APP_SETTINGS.get("openai_api_key") or os.environ.get("OPENAI_API_KEY")),
         "require_ai_review": require_ai,
         "require_ai_review_default": stored_ai,
         "autofix_default": stored_autofix,
+        "ai_model": stored_model or (APP_SETTINGS.get("ai_model") if _is_global_scope() else None) or os.environ.get("OPENAI_MODEL") or "gpt-4o-mini",
+        "ai_review_max_chars": stored_max_chars or (APP_SETTINGS.get("ai_review_max_chars") if _is_global_scope() else None) or int(os.environ.get("AI_REVIEW_MAX_CHARS", "12000")),
         "persistent_enabled": bool(os.environ.get("SETTINGS_ENC_KEY")),
         "settings_scope": os.environ.get("SETTINGS_SCOPE", "global"),
         "user_key_present": bool(user_key),
@@ -427,6 +500,22 @@ def settings_ui():
                             <button id='autofixOffBtn' type='button' class='btn ghost' aria-pressed='false'>Disable auto-fix</button>
                         </div>
                     </div>
+                    <div class='card'>
+                        <div class='section-title'>AI model</div>
+                        <div id='ai-model-status' class='status muted'>Loading model...</div>
+                        <input id='aiModelInput' type='text' placeholder='gpt-4o-mini' />
+                        <div class='actions'>
+                            <button id='saveModelBtn' type='button' class='btn'>Save model</button>
+                        </div>
+                    </div>
+                    <div class='card'>
+                        <div class='section-title'>AI review max chars</div>
+                        <div id='ai-max-status' class='status muted'>Loading limit...</div>
+                        <input id='aiMaxInput' type='number' min='1000' step='500' placeholder='12000' />
+                        <div class='actions'>
+                            <button id='saveMaxBtn' type='button' class='btn'>Save limit</button>
+                        </div>
+                    </div>
                 </div>
 
                 <label for='apiKey'>OpenAI API Key</label>
@@ -454,6 +543,12 @@ def settings_ui():
             const aiOffBtn = document.getElementById('aiOffBtn');
             const autofixOnBtn = document.getElementById('autofixOnBtn');
             const autofixOffBtn = document.getElementById('autofixOffBtn');
+            const aiModelStatus = document.getElementById('ai-model-status');
+            const aiMaxStatus = document.getElementById('ai-max-status');
+            const aiModelInput = document.getElementById('aiModelInput');
+            const aiMaxInput = document.getElementById('aiMaxInput');
+            const saveModelBtn = document.getElementById('saveModelBtn');
+            const saveMaxBtn = document.getElementById('saveMaxBtn');
             function getUserToken() {
                 const stored = localStorage.getItem('guardrails_user_token');
                 return stored ? stored.trim() : '';
@@ -532,10 +627,24 @@ def settings_ui():
                         autofixOnBtn.setAttribute('aria-pressed', 'false');
                         autofixOffBtn.setAttribute('aria-pressed', 'false');
                     }
+                    if (data.ai_model) {
+                        aiModelStatus.textContent = `Current model: ${data.ai_model}`;
+                        aiModelInput.value = data.ai_model;
+                    } else {
+                        aiModelStatus.textContent = 'AI model is not set.';
+                    }
+                    if (data.ai_review_max_chars) {
+                        aiMaxStatus.textContent = `Current limit: ${data.ai_review_max_chars} chars`;
+                        aiMaxInput.value = data.ai_review_max_chars;
+                    } else {
+                        aiMaxStatus.textContent = 'AI review max chars not set.';
+                    }
                 } catch (err) {
                     statusEl.textContent = 'Unable to load status.';
                     aiModeEl.textContent = 'Unable to load AI mode.';
                     autofixEl.textContent = 'Unable to load auto-fix.';
+                    aiModelStatus.textContent = 'Unable to load AI model.';
+                    aiMaxStatus.textContent = 'Unable to load AI limit.';
                 }
             }
 
@@ -640,6 +749,82 @@ def settings_ui():
             autofixOnBtn.addEventListener('click', () => setAutofixMode(true));
             autofixOffBtn.addEventListener('click', () => setAutofixMode(false));
 
+            async function setAiModel() {
+                resultEl.textContent = '';
+                resultEl.className = 'status';
+                const token = document.getElementById('settingsToken').value.trim();
+                const value = aiModelInput.value.trim();
+                if (!value) {
+                    resultEl.textContent = 'AI model is required.';
+                    resultEl.classList.add('error');
+                    return;
+                }
+                saveModelBtn.disabled = true;
+                try {
+                    const res = await fetch('/settings/ai-model', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+                            ...(getUserToken() ? { 'X-Guardrails-User': getUserToken() } : {})
+                        },
+                        body: JSON.stringify({ ai_model: value })
+                    });
+                    const data = await res.json();
+                    if (!res.ok) {
+                        throw new Error(data.error || 'Failed to update AI model.');
+                    }
+                    resultEl.textContent = 'AI model updated.';
+                    resultEl.classList.add('success');
+                    await refreshStatus();
+                } catch (err) {
+                    resultEl.textContent = err.message || 'Failed to update AI model.';
+                    resultEl.classList.add('error');
+                } finally {
+                    saveModelBtn.disabled = false;
+                }
+            }
+
+            async function setAiMaxChars() {
+                resultEl.textContent = '';
+                resultEl.className = 'status';
+                const token = document.getElementById('settingsToken').value.trim();
+                const raw = aiMaxInput.value.trim();
+                const value = Number(raw);
+                if (!raw || Number.isNaN(value) || value <= 0) {
+                    resultEl.textContent = 'AI review max chars must be a positive number.';
+                    resultEl.classList.add('error');
+                    return;
+                }
+                saveMaxBtn.disabled = true;
+                try {
+                    const res = await fetch('/settings/ai-max-chars', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+                            ...(getUserToken() ? { 'X-Guardrails-User': getUserToken() } : {})
+                        },
+                        body: JSON.stringify({ ai_review_max_chars: value })
+                    });
+                    const data = await res.json();
+                    if (!res.ok) {
+                        throw new Error(data.error || 'Failed to update AI limit.');
+                    }
+                    resultEl.textContent = 'AI review limit updated.';
+                    resultEl.classList.add('success');
+                    await refreshStatus();
+                } catch (err) {
+                    resultEl.textContent = err.message || 'Failed to update AI limit.';
+                    resultEl.classList.add('error');
+                } finally {
+                    saveMaxBtn.disabled = false;
+                }
+            }
+
+            saveModelBtn.addEventListener('click', setAiModel);
+            saveMaxBtn.addEventListener('click', setAiMaxChars);
+
             ensureUserToken().then(refreshStatus);
         </script>
     </body>
@@ -715,6 +900,52 @@ async def set_autofix_mode(request: Request):
         })
     return JSONResponse({"result": "saved", "persistent": True})
 
+@app.post("/settings/ai-model")
+async def set_ai_model(request: Request):
+    auth_error = _require_settings_token(request)
+    if auth_error:
+        return JSONResponse({"error": auth_error}, status_code=401)
+    user_key = _get_user_scope_key(request)
+    if not _is_global_scope() and not user_key:
+        return JSONResponse({"error": "User scope required. Set X-Guardrails-User header."}, status_code=400)
+    data = await request.json()
+    value = data.get("ai_model")
+    if not isinstance(value, str) or not value.strip():
+        return JSONResponse({"error": "ai_model must be a non-empty string."}, status_code=400)
+    if not user_key:
+        APP_SETTINGS["ai_model"] = value.strip()
+    persisted = settings_store.save_ai_model(value.strip(), user_key=user_key)
+    if not persisted:
+        return JSONResponse({
+            "result": "saved",
+            "persistent": False,
+            "warning": "SETTINGS_ENC_KEY not set; setting stored in memory only.",
+        })
+    return JSONResponse({"result": "saved", "persistent": True})
+
+@app.post("/settings/ai-max-chars")
+async def set_ai_max_chars(request: Request):
+    auth_error = _require_settings_token(request)
+    if auth_error:
+        return JSONResponse({"error": auth_error}, status_code=401)
+    user_key = _get_user_scope_key(request)
+    if not _is_global_scope() and not user_key:
+        return JSONResponse({"error": "User scope required. Set X-Guardrails-User header."}, status_code=400)
+    data = await request.json()
+    value = data.get("ai_review_max_chars")
+    if not isinstance(value, int) or value <= 0:
+        return JSONResponse({"error": "ai_review_max_chars must be a positive integer."}, status_code=400)
+    if not user_key:
+        APP_SETTINGS["ai_review_max_chars"] = value
+    persisted = settings_store.save_ai_review_max_chars(value, user_key=user_key)
+    if not persisted:
+        return JSONResponse({
+            "result": "saved",
+            "persistent": False,
+            "warning": "SETTINGS_ENC_KEY not set; setting stored in memory only.",
+        })
+    return JSONResponse({"result": "saved", "persistent": True})
+
 @app.post("/analyze")
 async def analyze(request: Request):
     data = await request.json()
@@ -725,10 +956,22 @@ async def analyze(request: Request):
     residency_error = _enforce_data_residency(repo_path)
     if residency_error:
         return JSONResponse({"error": residency_error}, status_code=400)
+    repo_license_issues = _collect_repo_license_issues(repo_path)
     sector = _resolve_sector(data, repo_path)
     policy_override = _resolve_policy_override(data, repo_path)
     ai_key = _get_request_ai_key(request, data)
     require_ai_review = _resolve_require_ai_review(data, request=request)
+    ai_model = _resolve_ai_model(data, request=request)
+    ai_review_max_chars = _resolve_ai_review_max_chars(data, request=request)
+    ai_context = {
+        "path": data.get("path"),
+        "language": data.get("language"),
+        "patch": data.get("patch"),
+        "repo": data.get("repo"),
+        "pr_number": data.get("pr_number"),
+        "commit": data.get("commit"),
+        "ai_generated": bool(data.get("ai_generated")),
+    }
     analysis = _analyze_code(
         code,
         sector,
@@ -737,12 +980,17 @@ async def analyze(request: Request):
         ai_key=ai_key,
         require_ai_review=require_ai_review,
         ai_generated=bool(data.get("ai_generated")),
+        ai_context=ai_context,
+        repo_license_issues=repo_license_issues,
+        ai_model=ai_model,
+        ai_review_max_chars=ai_review_max_chars,
     )
     _apply_guidelines(analysis)
     request_id = str(uuid.uuid4())
     result = {
         "result": "analyzed",
         "request_id": request_id,
+        "repo_license_issues": repo_license_issues,
         **analysis,
     }
     # Write audit log
@@ -769,10 +1017,23 @@ async def analyze_batch(request: Request):
     residency_error = _enforce_data_residency(repo_path)
     if residency_error:
         return JSONResponse({"error": residency_error}, status_code=400)
+    repo_license_issues = _collect_repo_license_issues(repo_path)
     sector = _resolve_sector(data, repo_path)
     policy_override = _resolve_policy_override(data, repo_path)
     ai_key = _get_request_ai_key(request, data)
     require_ai_review = _resolve_require_ai_review(data, request=request)
+    ai_model = _resolve_ai_model(data, request=request)
+    ai_review_max_chars = _resolve_ai_review_max_chars(data, request=request)
+
+    config = config_loader.load_config(repo_path)
+    ip_min_lines = int(config.get("ip_min_lines", 6) or 6)
+    ip_min_chars = int(config.get("ip_min_chars", 240) or 240)
+    file_map = {item.get("path", "unknown"): item.get("code", "") for item in files}
+    cross_file_issues = license_ip.detect_cross_file_duplicates(
+        file_map,
+        min_lines=ip_min_lines,
+        min_chars=ip_min_chars,
+    )
 
     findings = {}
     policy_mode = "advisory"
@@ -780,6 +1041,15 @@ async def analyze_batch(request: Request):
     for item in files:
         path = item.get("path", "unknown")
         code = item.get("code", "")
+        ai_context = {
+            "path": path,
+            "language": item.get("language"),
+            "patch": item.get("patch"),
+            "repo": data.get("repo"),
+            "pr_number": data.get("pr_number"),
+            "commit": data.get("commit"),
+            "ai_generated": bool(data.get("ai_generated")),
+        }
         analysis = _analyze_code(
             code,
             sector,
@@ -788,6 +1058,11 @@ async def analyze_batch(request: Request):
             ai_key=ai_key,
             require_ai_review=require_ai_review,
             ai_generated=bool(data.get("ai_generated")),
+            ai_context=ai_context,
+            extra_license_ip_issues=cross_file_issues.get(path, []),
+            repo_license_issues=repo_license_issues,
+            ai_model=ai_model,
+            ai_review_max_chars=ai_review_max_chars,
         )
         _apply_guidelines(analysis)
         findings[path] = {
@@ -808,6 +1083,7 @@ async def analyze_batch(request: Request):
         "findings": findings,
         "policy": policy_mode,
         "override_allowed": override_allowed,
+        "repo_license_issues": repo_license_issues,
     }
     audit_entry = {
         "request_id": request_id,
@@ -828,7 +1104,7 @@ def report_summary():
     summary = {
         "total_requests": len(entries),
         "policy_counts": {"advisory": 0, "warning": 0, "blocking": 0},
-        "issue_counts": {"issues": 0, "coding": 0, "license_ip": 0, "sector": 0, "ai": 0},
+        "issue_counts": {"issues": 0, "coding": 0, "license_ip": 0, "sector": 0, "ai": 0, "repo_license": 0},
     }
     for entry in entries:
         policy_mode = entry.get("policy", "advisory")
@@ -840,6 +1116,7 @@ def report_summary():
         summary["issue_counts"]["license_ip"] += len(output.get("license_ip_issues", []))
         summary["issue_counts"]["sector"] += len(output.get("sector_issues", []))
         summary["issue_counts"]["ai"] += len(output.get("ai_suggestions", []))
+        summary["issue_counts"]["repo_license"] += len(output.get("repo_license_issues", []))
     return JSONResponse(summary)
 
 @app.get("/report/trends")
@@ -904,12 +1181,24 @@ def _run_async_scan(job_id: str, payload: dict) -> None:
     policy_override = _resolve_policy_override(payload, repo_path)
     ai_key = payload.get("ai_api_key") or APP_SETTINGS.get("openai_api_key") or os.environ.get("OPENAI_API_KEY")
     require_ai_review = _resolve_require_ai_review(payload, request=None)
+    ai_model = _resolve_ai_model(payload, request=None)
+    ai_review_max_chars = _resolve_ai_review_max_chars(payload, request=None)
+    repo_license_issues = _collect_repo_license_issues(repo_path)
     findings = {}
     policy_mode = "advisory"
     override_allowed = False
     for item in files:
         path = item.get("path", "unknown")
         code = item.get("code", "")
+        ai_context = {
+            "path": path,
+            "language": item.get("language"),
+            "patch": item.get("patch"),
+            "repo": payload.get("repo"),
+            "pr_number": payload.get("pr_number"),
+            "commit": payload.get("commit"),
+            "ai_generated": bool(payload.get("ai_generated")),
+        }
         analysis = _analyze_code(
             code,
             sector,
@@ -918,6 +1207,10 @@ def _run_async_scan(job_id: str, payload: dict) -> None:
             ai_key=ai_key,
             require_ai_review=require_ai_review,
             ai_generated=bool(payload.get("ai_generated")),
+            ai_context=ai_context,
+            repo_license_issues=repo_license_issues,
+            ai_model=ai_model,
+            ai_review_max_chars=ai_review_max_chars,
         )
         _apply_guidelines(analysis)
         findings[path] = {"result": "analyzed", **analysis}
