@@ -174,3 +174,17 @@ def save_override_allowed_default(value: bool, user_key: str | None = None) -> b
     settings = load_user_settings(user_key)
     settings["override_allowed_default"] = value
     return save_user_settings(user_key, settings)
+
+
+def load_full_fix_default(user_key: str | None = None) -> Optional[bool]:
+    settings = load_user_settings(user_key)
+    value = settings.get("full_fix_default")
+    if isinstance(value, bool):
+        return value
+    return None
+
+
+def save_full_fix_default(value: bool, user_key: str | None = None) -> bool:
+    settings = load_user_settings(user_key)
+    settings["full_fix_default"] = value
+    return save_user_settings(user_key, settings)

@@ -27,6 +27,8 @@ def main() -> int:
     scan.add_argument("--no-backup", action="store_true", help="Disable autofix backups")
     scan.add_argument("--no-ai", action="store_true", help="Disable AI review for this run")
     scan.add_argument("--user", default=os.environ.get("GUARDRAILS_USER", ""), help="User token for scoped settings")
+    scan.add_argument("--full-fix", action="store_true", help="Apply safe autofixes and fail if findings remain")
+    scan.add_argument("--no-full-fix", action="store_true", help="Disable full fix explicitly")
 
     settings = sub.add_parser("settings", help="Manage Guardrails settings")
     settings.add_argument("--api", default=os.environ.get("GUARDRAILS_API_URL", "https://topcoder-production.up.railway.app"), help="Guardrails API base URL")
@@ -35,6 +37,7 @@ def main() -> int:
     settings.add_argument("--set-api-key", default="", help="Set API key in hosted settings")
     settings.add_argument("--ai-mode", choices=["require", "allow"], help="Set default AI mode (require or allow non-AI)")
     settings.add_argument("--autofix-mode", choices=["on", "off"], help="Set default auto-fix mode")
+    settings.add_argument("--full-fix-mode", choices=["on", "off"], help="Set default full fix mode")
     settings.add_argument("--issue-user-token", action="store_true", help="Generate a user token and print it")
     settings.add_argument("--generate-local-key", action="store_true", help="Generate a local settings encryption key")
     settings.add_argument("--verify", action="store_true", help="Verify settings sync with the server")
@@ -70,6 +73,10 @@ def main() -> int:
             argv.append("--no-backup")
         if args.no_ai:
             argv.append("--no-ai")
+        if args.full_fix:
+            argv.append("--full-fix")
+        if args.no_full_fix:
+            argv.append("--no-full-fix")
         return scan_repo.main(argv)
     if args.command == "settings":
         headers = {}
@@ -123,6 +130,17 @@ def main() -> int:
                 f"{api_base}/settings/autofix-mode",
                 headers={"Content-Type": "application/json", **headers},
                 json={"autofix_default": value},
+                timeout=15,
+            )
+            res.raise_for_status()
+            print(res.json())
+            return 0
+        if args.full_fix_mode:
+            value = args.full_fix_mode == "on"
+            res = requests.post(
+                f"{api_base}/settings/full-fix-mode",
+                headers={"Content-Type": "application/json", **headers},
+                json={"full_fix_default": value},
                 timeout=15,
             )
             res.raise_for_status()

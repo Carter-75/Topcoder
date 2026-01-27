@@ -115,6 +115,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--no-autofix", action="store_true", help="Disable autofix explicitly")
     parser.add_argument("--no-backup", action="store_true", help="Disable autofix backups")
     parser.add_argument("--no-ai", action="store_true", help="Disable AI review for this run")
+    parser.add_argument("--full-fix", action="store_true", help="Apply safe autofixes and fail if findings remain")
+    parser.add_argument("--no-full-fix", action="store_true", help="Disable full fix explicitly")
     args = parser.parse_args(argv)
 
     repo_path = os.path.abspath(args.repo)
@@ -124,6 +126,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     user_key = args.user.strip() or None
     require_ai_review: Optional[bool] = None
     server_has_key = False
+    full_fix_enabled: Optional[bool] = None
 
     if not api_key and user_key:
         try:
@@ -150,6 +153,11 @@ def main(argv: Optional[List[str]] = None) -> int:
                 require_ai_review = False
         except Exception:
             require_ai_review = False
+
+    if args.full_fix:
+        full_fix_enabled = True
+    elif args.no_full_fix:
+        full_fix_enabled = False
 
     if args.autofix:
         autofix_enabled = True
@@ -186,12 +194,20 @@ def main(argv: Optional[List[str]] = None) -> int:
                         raise RuntimeError("Missing user token for user-scoped settings.")
                 if isinstance(data.get("autofix_default"), bool):
                     autofix_enabled = data["autofix_default"]
+                if full_fix_enabled is None and isinstance(data.get("full_fix_default"), bool):
+                    full_fix_enabled = data["full_fix_default"]
                 if not ai_model and isinstance(data.get("ai_model"), str):
                     ai_model = data["ai_model"]
                 if ai_review_max_chars <= 0 and isinstance(data.get("ai_review_max_chars"), int):
                     ai_review_max_chars = data["ai_review_max_chars"]
         except Exception:
             autofix_enabled = None
+        if full_fix_enabled is None and os.isatty(0):
+            try:
+                answer = input("Enable full fix mode (auto-fix + fail on any remaining findings)? [y/N]: ").strip().lower()
+                full_fix_enabled = answer in {"y", "yes"}
+            except Exception:
+                full_fix_enabled = False
         if autofix_enabled is None:
             if os.isatty(0):
                 try:
@@ -201,6 +217,9 @@ def main(argv: Optional[List[str]] = None) -> int:
                     autofix_enabled = False
             else:
                 autofix_enabled = False
+
+    if full_fix_enabled:
+        autofix_enabled = True
 
     extensions = {ext.strip().lower() for ext in args.extensions.split(",") if ext.strip()}
     exclude_dirs = {d.strip() for d in args.exclude_dirs.split(",") if d.strip()}
@@ -287,8 +306,32 @@ def main(argv: Optional[List[str]] = None) -> int:
     if autofix_changes:
         results["autofix_changes"] = autofix_changes
 
+    if full_fix_enabled:
+        remaining_counts = {
+            "issues": 0,
+            "coding_issues": 0,
+            "license_ip_issues": 0,
+            "sector_issues": 0,
+            "ai_suggestions": 0,
+            "repo_license_issues": 0,
+            "errors": len(results.get("errors", {})),
+        }
+        for _, file_findings in results.get("findings", {}).items():
+            if not isinstance(file_findings, dict):
+                continue
+            for key in ("issues", "coding_issues", "license_ip_issues", "sector_issues", "ai_suggestions", "repo_license_issues"):
+                items = file_findings.get(key)
+                if isinstance(items, list):
+                    remaining_counts[key] += len(items)
+        results["full_fix_remaining"] = remaining_counts
+
     with open(args.output, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2)
 
     print(f"Scan complete. Results saved to {args.output}")
+    if full_fix_enabled:
+        total_remaining = sum(value for value in remaining_counts.values())
+        if total_remaining > 0:
+            print("Full fix mode: findings remain after autofix.")
+            return 2
     return 0
