@@ -1,6 +1,6 @@
 
 from fastapi import FastAPI, Request, BackgroundTasks
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.responses import JSONResponse, HTMLResponse, Response
 import sys
 import os
 import re
@@ -159,6 +159,10 @@ def health():
 @app.get("/")
 def root():
     return dashboard.dashboard()
+
+@app.get("/favicon.ico")
+def favicon():
+    return Response(status_code=204)
 
 @app.get("/settings")
 def get_settings():
