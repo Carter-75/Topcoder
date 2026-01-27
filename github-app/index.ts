@@ -3,11 +3,11 @@ import fetch from "node-fetch";
 
 export = (app: Probot) => {
   app.on(["pull_request.opened", "pull_request.synchronize"], async (context: Context) => {
-    const payload = context.payload as any;
-    const pr = payload.pull_request;
-    const repo = payload.repository;
+    const eventPayload = context.payload as any;
+    const pr = eventPayload.pull_request;
+    const repo = eventPayload.repository;
     // Collect minimal PR metadata and changed files (stub)
-    const payload = {
+    const requestPayload = {
       pr_number: pr.number,
       repo: repo.full_name,
       author: pr.user.login,
@@ -17,10 +17,11 @@ export = (app: Probot) => {
       repo_path: "."
     };
     // Call backend analyze endpoint (stub URL)
-    const res = await fetch("http://localhost:8000/analyze", {
+    const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
+    const res = await fetch(`${backendUrl}/analyze`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(requestPayload),
     });
     const result = await res.json();
     // Post a summary comment
