@@ -237,7 +237,7 @@ export = (app: Probot) => {
       ai_generated: aiGenerated,
       repo_path: repo.full_name,
     };
-    let result: AnalyzeBatchResponse;
+    let result: AnalyzeBatchResponse | null = null;
     if (useAsync) {
       const startRes = await fetch(`${backendUrl}/scan/async`, {
         method: "POST",
@@ -356,7 +356,7 @@ export = (app: Probot) => {
       repo_path: repo.full_name,
     };
 
-    let result: AnalyzeBatchResponse;
+    let result: AnalyzeBatchResponse | null = null;
     if (useAsync) {
       const startRes = await fetch(`${backendUrl}/scan/async`, {
         method: "POST",
