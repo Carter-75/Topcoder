@@ -3,8 +3,9 @@ import fetch from "node-fetch";
 
 export = (app: Probot) => {
   app.on(["pull_request.opened", "pull_request.synchronize"], async (context: Context) => {
-    const pr = context.payload.pull_request;
-    const repo = context.payload.repository;
+    const payload = context.payload as any;
+    const pr = payload.pull_request;
+    const repo = payload.repository;
     // Collect minimal PR metadata and changed files (stub)
     const payload = {
       pr_number: pr.number,
