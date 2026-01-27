@@ -42,7 +42,7 @@ jobs:
           if not any(path.startswith(bump_paths) for path in changed):
               print("No CLI changes detected; skipping bump.")
               Path("bump.env").write_text("bumped=false\n", encoding="utf-8")
-              return
+              raise SystemExit(0)
 
           pyproject = Path("pyproject.toml")
           text = pyproject.read_text(encoding="utf-8")
