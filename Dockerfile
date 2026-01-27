@@ -6,6 +6,7 @@ COPY backend/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt && pip install --no-cache-dir build twine
 
 COPY backend/ /app
+COPY publish_cli.py /app/publish_cli.py
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 

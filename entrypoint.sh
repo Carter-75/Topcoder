@@ -19,7 +19,7 @@ PY
   fi
 fi
 
-if [ "${PUBLISH_CLI:-}" = "true" ]; then
+if [ "${PUBLISH_CLI:-}" = "true" ] && [ -f "/app/publish_cli.py" ]; then
   python /app/publish_cli.py
 fi
 
