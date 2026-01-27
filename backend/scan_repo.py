@@ -66,6 +66,7 @@ def analyze_batch(
     repo_path: str,
     api_key: str | None,
     require_ai_review: bool | None,
+    user_key: str | None,
 ) -> Dict[str, Any]:
     payload = {
         "files": [{"path": path, "code": code} for path, code in files],
@@ -76,6 +77,8 @@ def analyze_batch(
     headers = {}
     if api_key:
         headers["X-OpenAI-API-Key"] = api_key
+    if user_key:
+        headers["X-Guardrails-User"] = user_key
     resp = requests.post(f"{api_url.rstrip('/')}/analyze-batch", json=payload, headers=headers, timeout=60)
     resp.raise_for_status()
     return resp.json()
@@ -98,6 +101,7 @@ def main(argv: List[str] | None = None) -> int:
     parser.add_argument("--extensions", default=",".join(sorted(DEFAULT_EXTENSIONS)), help="Comma-separated file extensions")
     parser.add_argument("--exclude-dirs", default=",".join(sorted(DEFAULT_EXCLUDE_DIRS)), help="Comma-separated directory names to skip")
     parser.add_argument("--api-key", default=os.environ.get("OPENAI_API_KEY", ""), help="OpenAI API key (or set OPENAI_API_KEY)")
+    parser.add_argument("--user", default=os.environ.get("GUARDRAILS_USER", ""), help="User token for scoped settings")
     parser.add_argument("--chunk-size", type=int, default=25, help="Number of files per batch request")
     parser.add_argument("--autofix", action="store_true", help="Apply safe autofixes to local files")
     parser.add_argument("--no-autofix", action="store_true", help="Disable autofix explicitly")
@@ -107,6 +111,7 @@ def main(argv: List[str] | None = None) -> int:
 
     repo_path = os.path.abspath(args.repo)
     api_key = args.api_key.strip()
+    user_key = args.user.strip() or None
     require_ai_review = None
 
     if args.no_ai:
@@ -116,7 +121,7 @@ def main(argv: List[str] | None = None) -> int:
             answer = input("No API key detected. Enter key to enable AI review, or press Enter to run in non-AI mode: ").strip()
             if answer:
                 api_key = answer
-                settings_store.save_api_key(api_key)
+                settings_store.save_api_key(api_key, user_key=user_key)
             else:
                 require_ai_review = False
         except Exception:
@@ -129,7 +134,11 @@ def main(argv: List[str] | None = None) -> int:
     else:
         autofix_enabled = None
         try:
-            settings_res = requests.get(f"{args.api.rstrip('/')}/settings", timeout=10)
+            settings_res = requests.get(
+                f"{args.api.rstrip('/')}/settings",
+                headers={"X-Guardrails-User": user_key} if user_key else None,
+                timeout=10,
+            )
             if settings_res.ok:
                 data = settings_res.json()
                 if isinstance(data.get("autofix_default"), bool):
@@ -184,7 +193,7 @@ def main(argv: List[str] | None = None) -> int:
             batch.append((rel_path, code))
             batch_paths.append(rel_path)
             if len(batch) >= args.chunk_size:
-                findings = analyze_batch(args.api, batch, args.sector, repo_path, api_key or None, require_ai_review)
+                findings = analyze_batch(args.api, batch, args.sector, repo_path, api_key or None, require_ai_review, user_key)
                 for file_path, file_findings in findings.get("findings", {}).items():
                     results["findings"][file_path] = file_findings
                     results["files_scanned"] += 1
@@ -195,7 +204,7 @@ def main(argv: List[str] | None = None) -> int:
 
     if batch:
         try:
-            findings = analyze_batch(args.api, batch, args.sector, repo_path, api_key or None, require_ai_review)
+            findings = analyze_batch(args.api, batch, args.sector, repo_path, api_key or None, require_ai_review, user_key)
             for file_path, file_findings in findings.get("findings", {}).items():
                 results["findings"][file_path] = file_findings
                 results["files_scanned"] += 1

@@ -56,9 +56,26 @@ def _sanitize_audit_input(data: dict) -> dict:
         sanitized["files"] = [{"path": f.get("path"), "size": len(f.get("code", ""))} for f in sanitized["files"]]
     return sanitized
 
+def _get_user_scope_key(request: Request) -> str | None:
+    scope = os.environ.get("SETTINGS_SCOPE", "global").lower()
+    if scope == "ip":
+        return request.headers.get("x-guardrails-user") or (request.client.host if request.client else None)
+    if scope == "user":
+        return request.headers.get("x-guardrails-user")
+    return None
+
+
+def _is_global_scope() -> bool:
+    return os.environ.get("SETTINGS_SCOPE", "global").lower() == "global"
+
+
 def _get_request_ai_key(request: Request, data: dict) -> str | None:
     header_key = request.headers.get("x-openai-api-key") or request.headers.get("x-openai-key")
-    return header_key or data.get("ai_api_key") or APP_SETTINGS.get("openai_api_key") or os.environ.get("OPENAI_API_KEY")
+    user_key = _get_user_scope_key(request)
+    stored_key = settings_store.load_api_key(user_key)
+    if _is_global_scope():
+        return header_key or data.get("ai_api_key") or stored_key or APP_SETTINGS.get("openai_api_key") or os.environ.get("OPENAI_API_KEY")
+    return header_key or data.get("ai_api_key") or stored_key
 
 def _require_settings_token(request: Request) -> str | None:
     token = os.environ.get("SETTINGS_TOKEN")
@@ -69,12 +86,19 @@ def _require_settings_token(request: Request) -> str | None:
         return None
     return "Missing or invalid settings token."
 
-def _resolve_require_ai_review(data: dict) -> bool:
+def _resolve_require_ai_review(data: dict, request: Request | None = None) -> bool:
     if "require_ai_review" in data and isinstance(data.get("require_ai_review"), bool):
         return data["require_ai_review"]
-    if isinstance(APP_SETTINGS.get("require_ai_review_default"), bool):
+    if request is not None:
+        user_key = _get_user_scope_key(request)
+        stored = settings_store.load_require_ai_review_default(user_key)
+        if isinstance(stored, bool):
+            return stored
+    if isinstance(APP_SETTINGS.get("require_ai_review_default"), bool) and _is_global_scope():
         return APP_SETTINGS["require_ai_review_default"]
-    return os.environ.get("REQUIRE_AI_REVIEW", "true").lower() == "true"
+    if _is_global_scope():
+        return os.environ.get("REQUIRE_AI_REVIEW", "true").lower() == "true"
+    return os.environ.get("REQUIRE_AI_REVIEW_DEFAULT", "false").lower() == "true"
 
 def _summarize_output(output: dict) -> dict:
     return {
@@ -165,14 +189,20 @@ def favicon():
     return Response(status_code=204)
 
 @app.get("/settings")
-def get_settings():
-    require_ai = _resolve_require_ai_review({})
+def get_settings(request: Request):
+    user_key = _get_user_scope_key(request)
+    require_ai = _resolve_require_ai_review({}, request=request)
+    stored_key = settings_store.load_api_key(user_key)
+    stored_ai = settings_store.load_require_ai_review_default(user_key)
+    stored_autofix = settings_store.load_autofix_default(user_key)
     return {
-        "openai_api_key_set": bool(APP_SETTINGS.get("openai_api_key") or os.environ.get("OPENAI_API_KEY")),
+        "openai_api_key_set": bool(stored_key or (_is_global_scope() and (APP_SETTINGS.get("openai_api_key") or os.environ.get("OPENAI_API_KEY")))),
         "require_ai_review": require_ai,
-        "require_ai_review_default": APP_SETTINGS.get("require_ai_review_default"),
-        "autofix_default": APP_SETTINGS.get("autofix_default"),
+        "require_ai_review_default": stored_ai,
+        "autofix_default": stored_autofix,
         "persistent_enabled": bool(os.environ.get("SETTINGS_ENC_KEY")),
+        "settings_scope": os.environ.get("SETTINGS_SCOPE", "global"),
+        "user_key_present": bool(user_key),
     }
 
 @app.get("/settings/ui")
@@ -200,7 +230,7 @@ def settings_ui():
     <body>
         <div class='container'>
             <h1>Guardrails Settings</h1>
-            <p class='muted'>Store your OpenAI API key for all Guardrails scans. If <b>SETTINGS_TOKEN</b> is configured on the server, include it below. Use the AI mode buttons to require AI or allow non-AI by default.</p>
+            <p class='muted'>Store your OpenAI API key for Guardrails scans. If <b>SETTINGS_TOKEN</b> is configured on the server, include it below. Use the AI mode buttons to require AI or allow non-AI by default. If <b>SETTINGS_SCOPE=user</b> is enabled, settings are scoped to your user token.</p>
 
             <div class='card'>
                 <div id='current-status' class='status muted'>Checking current status...</div>
@@ -230,9 +260,13 @@ def settings_ui():
             <label for='settingsToken'>Settings Token (optional)</label>
             <input id='settingsToken' type='password' placeholder='Bearer token if required' />
 
+            <label for='userToken'>User Token (for user-scoped settings)</label>
+            <input id='userToken' type='text' placeholder='Auto-generated and stored locally' />
+
             <div style='margin-top:1.2rem; display:flex; gap:0.6rem; flex-wrap:wrap;'>
                 <button id='saveBtn'>Save Key</button>
                 <button id='genKeyBtn' type='button' style='background:#546e7a;'>Generate Settings Key</button>
+                <button id='genUserBtn' type='button' style='background:#00897b;'>Generate User Token</button>
             </div>
             <div id='result' class='status'></div>
             <div id='genResult' class='status'></div>
@@ -250,14 +284,48 @@ def settings_ui():
             const aiOffBtn = document.getElementById('aiOffBtn');
             const autofixOnBtn = document.getElementById('autofixOnBtn');
             const autofixOffBtn = document.getElementById('autofixOffBtn');
+            const userTokenInput = document.getElementById('userToken');
+            const genUserBtn = document.getElementById('genUserBtn');
+
+            function getUserToken() {
+                return userTokenInput.value.trim();
+            }
+
+            function ensureUserToken() {
+                const stored = localStorage.getItem('guardrails_user_token');
+                if (stored) {
+                    userTokenInput.value = stored;
+                    return stored;
+                }
+                const array = new Uint8Array(16);
+                crypto.getRandomValues(array);
+                const token = Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('');
+                localStorage.setItem('guardrails_user_token', token);
+                userTokenInput.value = token;
+                return token;
+            }
+
+            userTokenInput.addEventListener('change', () => {
+                const token = getUserToken();
+                if (token) {
+                    localStorage.setItem('guardrails_user_token', token);
+                }
+            });
 
             async function refreshStatus() {
                 try {
-                    const res = await fetch('/settings');
+                    const res = await fetch('/settings', {
+                        headers: {
+                            ...(getUserToken() ? { 'X-Guardrails-User': getUserToken() } : {})
+                        }
+                    });
                     const data = await res.json();
                     statusEl.textContent = data.openai_api_key_set
                         ? 'API key is configured.'
                         : 'API key is not configured.';
+                    if (data.settings_scope === 'user') {
+                        statusEl.textContent += data.user_key_present ? ' (User scoped)' : ' (User scoped: missing token)';
+                    }
                     aiModeEl.textContent = data.require_ai_review
                         ? 'AI review is required by default.'
                         : 'Non-AI mode is allowed by default.';
@@ -291,7 +359,8 @@ def settings_ui():
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+                            ...(getUserToken() ? { 'X-Guardrails-User': getUserToken() } : {})
                         },
                         body: JSON.stringify({ api_key: apiKey })
                     });
@@ -320,7 +389,8 @@ def settings_ui():
                     const res = await fetch('/settings/generate-key', {
                         method: 'POST',
                         headers: {
-                            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+                            ...(getUserToken() ? { 'X-Guardrails-User': getUserToken() } : {})
                         }
                     });
                     const data = await res.json();
@@ -346,7 +416,8 @@ def settings_ui():
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+                            ...(getUserToken() ? { 'X-Guardrails-User': getUserToken() } : {})
                         },
                         body: JSON.stringify({ require_ai_review: value })
                     });
@@ -375,7 +446,8 @@ def settings_ui():
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+                            ...(getUserToken() ? { 'X-Guardrails-User': getUserToken() } : {})
                         },
                         body: JSON.stringify({ autofix_default: value })
                     });
@@ -395,6 +467,14 @@ def settings_ui():
             autofixOnBtn.addEventListener('click', () => setAutofixMode(true));
             autofixOffBtn.addEventListener('click', () => setAutofixMode(false));
 
+            genUserBtn.addEventListener('click', () => {
+                const token = ensureUserToken();
+                resultEl.textContent = `User token set: ${token}`;
+                resultEl.classList.add('success');
+                refreshStatus();
+            });
+
+            ensureUserToken();
             refreshStatus();
         </script>
     </body>
@@ -415,12 +495,15 @@ async def set_api_key(request: Request):
     auth_error = _require_settings_token(request)
     if auth_error:
         return JSONResponse({"error": auth_error}, status_code=401)
+    user_key = _get_user_scope_key(request)
+    if not _is_global_scope() and not user_key:
+        return JSONResponse({"error": "User scope required. Set X-Guardrails-User header."}, status_code=400)
     data = await request.json()
     key = data.get("api_key")
     if not key:
         return JSONResponse({"error": "api_key is required."}, status_code=400)
-    APP_SETTINGS["openai_api_key"] = key
-    persisted = settings_store.save_api_key(key)
+    APP_SETTINGS["openai_api_key"] = key if not user_key else APP_SETTINGS.get("openai_api_key")
+    persisted = settings_store.save_api_key(key, user_key=user_key)
     if not persisted:
         return JSONResponse({
             "result": "saved",
@@ -434,12 +517,16 @@ async def set_ai_mode(request: Request):
     auth_error = _require_settings_token(request)
     if auth_error:
         return JSONResponse({"error": auth_error}, status_code=401)
+    user_key = _get_user_scope_key(request)
+    if not _is_global_scope() and not user_key:
+        return JSONResponse({"error": "User scope required. Set X-Guardrails-User header."}, status_code=400)
     data = await request.json()
     value = data.get("require_ai_review")
     if not isinstance(value, bool):
         return JSONResponse({"error": "require_ai_review must be a boolean."}, status_code=400)
-    APP_SETTINGS["require_ai_review_default"] = value
-    persisted = settings_store.save_require_ai_review_default(value)
+    if not user_key:
+        APP_SETTINGS["require_ai_review_default"] = value
+    persisted = settings_store.save_require_ai_review_default(value, user_key=user_key)
     if not persisted:
         return JSONResponse({
             "result": "saved",
@@ -453,12 +540,16 @@ async def set_autofix_mode(request: Request):
     auth_error = _require_settings_token(request)
     if auth_error:
         return JSONResponse({"error": auth_error}, status_code=401)
+    user_key = _get_user_scope_key(request)
+    if not _is_global_scope() and not user_key:
+        return JSONResponse({"error": "User scope required. Set X-Guardrails-User header."}, status_code=400)
     data = await request.json()
     value = data.get("autofix_default")
     if not isinstance(value, bool):
         return JSONResponse({"error": "autofix_default must be a boolean."}, status_code=400)
-    APP_SETTINGS["autofix_default"] = value
-    persisted = settings_store.save_autofix_default(value)
+    if not user_key:
+        APP_SETTINGS["autofix_default"] = value
+    persisted = settings_store.save_autofix_default(value, user_key=user_key)
     if not persisted:
         return JSONResponse({
             "result": "saved",
@@ -478,7 +569,7 @@ async def analyze(request: Request):
     sector = _resolve_sector(data, repo_path)
     policy_override = _resolve_policy_override(data, repo_path)
     ai_key = _get_request_ai_key(request, data)
-    require_ai_review = _resolve_require_ai_review(data)
+    require_ai_review = _resolve_require_ai_review(data, request=request)
     analysis = _analyze_code(
         code,
         sector,
@@ -513,7 +604,7 @@ async def analyze_batch(request: Request):
     sector = _resolve_sector(data, repo_path)
     policy_override = _resolve_policy_override(data, repo_path)
     ai_key = _get_request_ai_key(request, data)
-    require_ai_review = _resolve_require_ai_review(data)
+    require_ai_review = _resolve_require_ai_review(data, request=request)
 
     findings = {}
     policy_mode = "advisory"
@@ -613,7 +704,7 @@ def _run_async_scan(job_id: str, payload: dict) -> None:
     sector = _resolve_sector(payload, repo_path)
     policy_override = _resolve_policy_override(payload, repo_path)
     ai_key = payload.get("ai_api_key") or APP_SETTINGS.get("openai_api_key") or os.environ.get("OPENAI_API_KEY")
-    require_ai_review = _resolve_require_ai_review(payload)
+    require_ai_review = _resolve_require_ai_review(payload, request=None)
     findings = {}
     policy_mode = "advisory"
     override_allowed = False

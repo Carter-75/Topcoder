@@ -46,40 +46,64 @@ def save_settings(settings: Dict[str, Any]) -> bool:
     return True
 
 
-def load_api_key() -> Optional[str]:
+def load_user_settings(user_key: str | None) -> Dict[str, Any]:
     settings = load_settings()
-    return settings.get("openai_api_key")
+    if not user_key:
+        return settings
+    users = settings.get("users")
+    if isinstance(users, dict):
+        value = users.get(user_key)
+        if isinstance(value, dict):
+            return value
+    return {}
 
 
-def save_api_key(api_key: str) -> bool:
+def save_user_settings(user_key: str | None, user_settings: Dict[str, Any]) -> bool:
     settings = load_settings()
-    settings["openai_api_key"] = api_key
+    if not user_key:
+        return save_settings({**settings, **user_settings})
+    users = settings.get("users")
+    if not isinstance(users, dict):
+        users = {}
+    users[user_key] = user_settings
+    settings["users"] = users
     return save_settings(settings)
 
 
-def load_require_ai_review_default() -> Optional[bool]:
-    settings = load_settings()
+def load_api_key(user_key: str | None = None) -> Optional[str]:
+    settings = load_user_settings(user_key)
+    return settings.get("openai_api_key")
+
+
+def save_api_key(api_key: str, user_key: str | None = None) -> bool:
+    settings = load_user_settings(user_key)
+    settings["openai_api_key"] = api_key
+    return save_user_settings(user_key, settings)
+
+
+def load_require_ai_review_default(user_key: str | None = None) -> Optional[bool]:
+    settings = load_user_settings(user_key)
     value = settings.get("require_ai_review_default")
     if isinstance(value, bool):
         return value
     return None
 
 
-def save_require_ai_review_default(value: bool) -> bool:
-    settings = load_settings()
+def save_require_ai_review_default(value: bool, user_key: str | None = None) -> bool:
+    settings = load_user_settings(user_key)
     settings["require_ai_review_default"] = value
-    return save_settings(settings)
+    return save_user_settings(user_key, settings)
 
 
-def load_autofix_default() -> Optional[bool]:
-    settings = load_settings()
+def load_autofix_default(user_key: str | None = None) -> Optional[bool]:
+    settings = load_user_settings(user_key)
     value = settings.get("autofix_default")
     if isinstance(value, bool):
         return value
     return None
 
 
-def save_autofix_default(value: bool) -> bool:
-    settings = load_settings()
+def save_autofix_default(value: bool, user_key: str | None = None) -> bool:
+    settings = load_user_settings(user_key)
     settings["autofix_default"] = value
-    return save_settings(settings)
+    return save_user_settings(user_key, settings)

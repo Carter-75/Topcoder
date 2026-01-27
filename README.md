@@ -50,6 +50,8 @@ Data residency:
 Persistent settings (encrypted):
 - `SETTINGS_ENC_KEY` (required for persistence) — a Fernet key used to encrypt stored settings
 - `SETTINGS_STORE_PATH` (optional) — file path for encrypted storage (default: `settings.enc`)
+- `SETTINGS_SCOPE` (optional) — `user` (recommended) or `global` (shared)
+- `REQUIRE_AI_REVIEW_DEFAULT` (optional) — default AI mode when user settings are not set (default: false)
 
 ## Running the Server
 From the `Topcoder/backend` directory:
@@ -86,6 +88,7 @@ Settings UI:
 - Website (main app): https://topcoder-production.up.railway.app
 - Open `/settings/ui` on the website to store the key in the main app.
 - Auto-fix default and AI mode can be set in the UI and used by the CLI.
+- When `SETTINGS_SCOPE=user`, the UI generates a per-user token and stores it locally.
 
 ## CLI usage (scan any local repo)
 Use the lightweight CLI wrapper to scan any repo from its root:
@@ -97,6 +100,11 @@ Use the lightweight CLI wrapper to scan any repo from its root:
 - If no API key is detected, the CLI prompts for a key or lets you run in non-AI mode
 - Use `--no-ai` to explicitly disable AI review for that run
 - If `SETTINGS_ENC_KEY` is set locally, the CLI saves the entered key to encrypted storage
+- For `SETTINGS_SCOPE=user`, pass `--user <token>` or set `GUARDRAILS_USER` to match the UI token
+
+One-time install (cross-platform, Python only):
+- Run `python install-cli.py` from this repo to add `guardrails` to your PATH
+- After that, run `guardrails scan <repo-path>` from any folder
 
 ## CLI settings (no website required)
 You can manage the same settings from the CLI:
@@ -105,10 +113,12 @@ You can manage the same settings from the CLI:
 - Set API key: `python guardrails.py settings --set-api-key <key>`
 - Set AI mode: `python guardrails.py settings --ai-mode require|allow`
 - Set auto-fix default: `python guardrails.py settings --autofix-mode on|off`
+- Verify settings sync: `python guardrails.py settings --verify`
 
 Optional flags:
 - `--api` to target a different backend URL
 - `--token` if SETTINGS_TOKEN is enabled on the server
+- `--user` to set `X-Guardrails-User` for scoped settings (useful behind shared IPs)
 
 ## GitHub App endpoint
 Use the same deployment for the webhook URL:

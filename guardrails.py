@@ -21,6 +21,7 @@ def main() -> int:
     scan.add_argument("--extensions", default=",".join(sorted(scan_repo.DEFAULT_EXTENSIONS)), help="Comma-separated file extensions")
     scan.add_argument("--exclude-dirs", default=",".join(sorted(scan_repo.DEFAULT_EXCLUDE_DIRS)), help="Comma-separated directory names to skip")
     scan.add_argument("--api-key", default=os.environ.get("OPENAI_API_KEY", ""), help="OpenAI API key (or set OPENAI_API_KEY)")
+    scan.add_argument("--user", default=os.environ.get("GUARDRAILS_USER", ""), help="User token for scoped settings")
     scan.add_argument("--chunk-size", type=int, default=25, help="Number of files per batch request")
     scan.add_argument("--autofix", action="store_true", help="Apply safe autofixes to local files")
     scan.add_argument("--no-autofix", action="store_true", help="Disable autofix explicitly")
@@ -30,11 +31,13 @@ def main() -> int:
     settings = sub.add_parser("settings", help="Manage Guardrails settings")
     settings.add_argument("--api", default=os.environ.get("GUARDRAILS_API_URL", "https://topcoder-production.up.railway.app"), help="Guardrails API base URL")
     settings.add_argument("--token", default=os.environ.get("SETTINGS_TOKEN", ""), help="Settings token for protected endpoints")
+    settings.add_argument("--user", default=os.environ.get("GUARDRAILS_USER", ""), help="Optional user identifier for scoped settings")
     settings.add_argument("--set-api-key", default="", help="Set API key in hosted settings")
     settings.add_argument("--ai-mode", choices=["require", "allow"], help="Set default AI mode (require or allow non-AI)")
     settings.add_argument("--autofix-mode", choices=["on", "off"], help="Set default auto-fix mode")
     settings.add_argument("--generate-key", action="store_true", help="Generate a settings encryption key on the server")
     settings.add_argument("--generate-local-key", action="store_true", help="Generate a local settings encryption key")
+    settings.add_argument("--verify", action="store_true", help="Verify settings sync with the server")
 
     args = parser.parse_args()
     if args.command == "scan":
@@ -56,6 +59,8 @@ def main() -> int:
             args.api_key,
             "--chunk-size",
             str(args.chunk_size),
+            "--user",
+            args.user,
         ]
         if args.autofix:
             argv.append("--autofix")
@@ -70,6 +75,8 @@ def main() -> int:
         headers = {}
         if args.token:
             headers["Authorization"] = f"Bearer {args.token}"
+        if args.user:
+            headers["X-Guardrails-User"] = args.user
         api_base = args.api.rstrip("/")
         if args.generate_local_key:
             print(Fernet.generate_key().decode("utf-8"))
@@ -87,6 +94,11 @@ def main() -> int:
                 json={"api_key": args.set_api_key},
                 timeout=15,
             )
+            res.raise_for_status()
+            print(res.json())
+            return 0
+        if args.verify:
+            res = requests.get(f"{api_base}/settings", headers=headers, timeout=15)
             res.raise_for_status()
             print(res.json())
             return 0
