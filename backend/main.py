@@ -1,3 +1,4 @@
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 import sys
@@ -17,6 +18,10 @@ import rule_engine
 import dashboard
 
 app = FastAPI(title="Guardrails Backend API")
+
+@app.get("/dashboard")
+def dashboard_view():
+    return dashboard.dashboard()
 
 @app.get("/health")
 def health():

@@ -1,21 +1,20 @@
-from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 import os
 import json
 
-app = FastAPI()
-
-@app.get("/dashboard", response_class=HTMLResponse)
 def dashboard():
     log_path = os.environ.get("AUDIT_LOG_PATH", "audit_log.jsonl")
     entries = []
-    if os.path.exists(log_path):
-        with open(log_path, "r", encoding="utf-8") as f:
-            for line in f:
-                try:
-                    entries.append(json.loads(line))
-                except Exception:
-                    continue
+    try:
+        if os.path.exists(log_path):
+            with open(log_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    try:
+                        entries.append(json.loads(line))
+                    except Exception:
+                        continue
+    except Exception:
+        entries = []
     html = """
     <html>
     <head>

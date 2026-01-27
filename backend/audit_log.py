@@ -7,8 +7,11 @@ AUDIT_LOG_PATH = os.environ.get("AUDIT_LOG_PATH", "audit_log.jsonl")
 
 def write_audit_log(entry: Dict[str, Any]):
     entry["timestamp"] = datetime.utcnow().isoformat() + "Z"
-    with open(AUDIT_LOG_PATH, "a", encoding="utf-8") as f:
-        f.write(json.dumps(entry) + "\n")
+    try:
+        with open(AUDIT_LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry) + "\n")
+    except Exception:
+        pass
 
 # For exporting logs (simple API or CLI can read the file)
 def export_audit_log() -> list:

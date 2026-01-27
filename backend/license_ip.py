@@ -26,8 +26,8 @@ def detect_ip_duplication(code: str) -> List[Dict[str, Any]]:
     seen = {}
     issues = []
     for i, line in enumerate(lines):
-        if len(line.strip()) > 40:
-            key = line.strip()
+        key = line.strip()
+        if key:
             if key in seen:
                 issues.append({
                     "type": "ip_duplication",
