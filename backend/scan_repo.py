@@ -97,7 +97,7 @@ def _write_backup(backup_root: str, repo_root: str, rel_path: str, code: str) ->
 
 def main(argv: List[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Scan a repository using the Guardrails API.")
-    parser.add_argument("repo", help="Path to the repository root")
+    parser.add_argument("repo", nargs="?", default=".", help="Path to the repository root (defaults to current directory)")
     parser.add_argument("--api", default=os.environ.get("GUARDRAILS_API_URL", "https://topcoder-production.up.railway.app"), help="Guardrails API base URL")
     parser.add_argument("--sector", default="finance", help="Sector rulepack to apply")
     parser.add_argument("--output", default="scan_results.json", help="Output JSON file")

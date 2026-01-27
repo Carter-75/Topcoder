@@ -15,7 +15,9 @@ def load_config(repo_path: str = ".") -> Dict[str, Any]:
         if os.path.exists(path):
             with open(path, "r", encoding="utf-8") as f:
                 if path.endswith(('.yml', '.yaml')):
-                    return yaml.safe_load(f)
+                    data = yaml.safe_load(f)
+                    return data if isinstance(data, dict) else {}
                 else:
-                    return json.load(f)
+                    data = json.load(f)
+                    return data if isinstance(data, dict) else {}
     return {}  # Default: empty config

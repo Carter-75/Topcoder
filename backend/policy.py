@@ -1,5 +1,6 @@
 from typing import List, Dict, Any
 import config_loader
+import settings_store
 
 # Example policy config (could be loaded from YAML/JSON in future)
 DEFAULT_POLICY = {
@@ -8,8 +9,10 @@ DEFAULT_POLICY = {
     "insecure_deserialization": "warning",
     "unsafe_execution": "warning",
     "path_traversal_risk": "warning",
+    "unsafe_file_operation": "warning",
     "insecure_crypto": "warning",
     "copilot_generated_code": "warning",
+    "copilot_insecure_suggestion": "warning",
     "ai_review_missing_key": "blocking",
     "naming_convention": "advisory",
     "logging_practice": "advisory",
@@ -55,7 +58,11 @@ def evaluate_policy(
             mode = "warning"
     return mode
 
-def is_override_allowed(repo_path: str = ".") -> bool:
+def is_override_allowed(repo_path: str = ".", user_key: str | None = None) -> bool:
     config = config_loader.load_config(repo_path)
-    override_allowed = config.get("override_allowed", True)
-    return bool(override_allowed)
+    if "override_allowed" in config:
+        return bool(config.get("override_allowed"))
+    stored = settings_store.load_override_allowed_default(user_key)
+    if isinstance(stored, bool):
+        return stored
+    return True

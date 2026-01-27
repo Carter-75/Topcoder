@@ -129,6 +129,32 @@ def detect_path_traversal(code: str) -> List[Dict[str, Any]]:
             })
     return issues
 
+def detect_unsafe_file_operations(code: str) -> List[Dict[str, Any]]:
+    patterns = [
+        r"open\(.*(request|input|argv|sys\.argv|params|query|payload).*\)",
+        r"os\.remove\(.*(request|input|argv|sys\.argv|params|query|payload).*\)",
+        r"os\.unlink\(.*(request|input|argv|sys\.argv|params|query|payload).*\)",
+        r"shutil\.rmtree\(.*(request|input|argv|sys\.argv|params|query|payload).*\)",
+        r"Path\(.*(request|input|argv|sys\.argv|params|query|payload).*\)\.unlink\(\)",
+        r"Path\(.*(request|input|argv|sys\.argv|params|query|payload).*\)\.write_text\(",
+    ]
+    issues = []
+    for pat in patterns:
+        for m in re.finditer(pat, code, re.IGNORECASE):
+            issues.append({
+                "type": "unsafe_file_operation",
+                "pattern": pat,
+                "match": m.group(0),
+                "start": m.start(),
+                "end": m.end(),
+                "message": "Potential unsafe file operation using untrusted input.",
+                "suggestion": "Validate and normalize file paths and restrict to an allowlist base directory.",
+                "cwe": "CWE-73",
+                "owasp": "A01:2021",
+                "severity": "warning",
+            })
+    return issues
+
 def detect_insecure_crypto(code: str) -> List[Dict[str, Any]]:
     patterns = [
         r"md5\(",
@@ -181,6 +207,7 @@ def run_security_rules(code: str, ai_generated: bool = False) -> List[Dict[str, 
     issues.extend(detect_insecure_deserialization(code))
     issues.extend(detect_unsafe_exec(code))
     issues.extend(detect_path_traversal(code))
+    issues.extend(detect_unsafe_file_operations(code))
     issues.extend(detect_insecure_crypto(code))
     issues.extend([
         {
@@ -198,4 +225,17 @@ def run_security_rules(code: str, ai_generated: bool = False) -> List[Dict[str, 
         for issue in issues:
             issue["copilot_strict"] = True
             issue["copilot_generated"] = True
+        for issue in issues:
+            if issue.get("type") in {"copilot_generated_code", "copilot_insecure_suggestion"}:
+                continue
+            if issue.get("severity") in {"warning", "blocking"}:
+                issues.append({
+                    "type": "copilot_insecure_suggestion",
+                    "message": "Copilot-generated code triggered a security guardrail.",
+                    "related_issue": issue.get("type"),
+                    "start": issue.get("start"),
+                    "end": issue.get("end"),
+                    "severity": "warning",
+                    "copilot_generated": True,
+                })
     return issues

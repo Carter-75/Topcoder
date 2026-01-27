@@ -53,6 +53,8 @@ def _sanitize_audit_input(data: dict) -> dict:
         sanitized["code"] = "<redacted>"
     if "ai_api_key" in sanitized:
         sanitized["ai_api_key"] = "<redacted>"
+    if "repo_license_texts" in sanitized:
+        sanitized["repo_license_texts"] = "<redacted>"
     if "files" in sanitized:
         sanitized["files"] = [{"path": f.get("path"), "size": len(f.get("code", ""))} for f in sanitized["files"]]
     return sanitized
@@ -144,6 +146,31 @@ def _summarize_output(output: dict) -> dict:
         },
     }
 
+def _sanitize_issue(issue: dict) -> dict:
+    if not isinstance(issue, dict):
+        return {}
+    sanitized = dict(issue)
+    for key in ["match", "pattern", "snippet", "patch", "code", "diff", "raw", "original_file"]:
+        if key in sanitized:
+            sanitized.pop(key, None)
+    return sanitized
+
+def _sanitize_audit_output(output: dict) -> dict:
+    if not isinstance(output, dict):
+        return {}
+    sanitized = dict(output)
+    for key in ["issues", "coding_issues", "license_ip_issues", "sector_issues", "ai_suggestions", "repo_license_issues"]:
+        if isinstance(sanitized.get(key), list):
+            sanitized[key] = [_sanitize_issue(item) for item in sanitized[key]]
+    if isinstance(sanitized.get("findings"), dict):
+        findings = {}
+        for path, result in sanitized["findings"].items():
+            if not isinstance(result, dict):
+                continue
+            findings[path] = _sanitize_audit_output(result)
+        sanitized["findings"] = findings
+    return sanitized
+
 def _apply_guidelines(analysis: dict) -> None:
     for group in [
         "issues",
@@ -164,12 +191,16 @@ def _enforce_data_residency(repo_path: str) -> str | None:
         return f"Repository requires data residency '{desired}', but server is '{enforced}'."
     return None
 
-def _collect_repo_license_issues(repo_path: str) -> List[Dict[str, Any]]:
+def _collect_repo_license_issues(repo_path: str, license_texts: List[Dict[str, str]] | None = None) -> List[Dict[str, Any]]:
     if not repo_path or not os.path.isdir(repo_path):
-        return []
+        if not license_texts:
+            return []
     config = config_loader.load_config(repo_path)
     restricted = config.get("restricted_licenses", ["GPL", "AGPL", "SSPL", "Elastic-2.0", "Commons-Clause"])
-    detected = license_ip.scan_repo_licenses(repo_path)
+    if license_texts:
+        detected = license_ip.scan_license_texts(license_texts)
+    else:
+        detected = license_ip.scan_repo_licenses(repo_path)
     issues = []
     for license_name in detected:
         issues.append({
@@ -200,6 +231,7 @@ def _analyze_code(
     repo_license_issues: List[Dict[str, Any]] | None = None,
     ai_model: str | None = None,
     ai_review_max_chars: int | None = None,
+    user_key: str | None = None,
 ) -> dict:
     issues = security_rules.run_security_rules(code, ai_generated=ai_generated)
     coding_issues = coding_standards.run_coding_standards_rules(code, repo_path=repo_path)
@@ -230,7 +262,7 @@ def _analyze_code(
         repo_path=repo_path,
         policy_override=policy_override,
     )
-    override_allowed = policy.is_override_allowed(repo_path) if policy_mode == "blocking" else False
+    override_allowed = policy.is_override_allowed(repo_path, user_key=user_key) if policy_mode == "blocking" else False
     return {
         "issues": issues,
         "coding_issues": coding_issues,
@@ -391,11 +423,13 @@ def get_settings(request: Request, response: FastAPIResponse):
     stored_autofix = settings_store.load_autofix_default(user_key)
     stored_model = settings_store.load_ai_model(user_key)
     stored_max_chars = settings_store.load_ai_review_max_chars(user_key)
+    stored_override_allowed = settings_store.load_override_allowed_default(user_key)
     return {
         "openai_api_key_set": bool(stored_key) if not _is_global_scope() else bool(stored_key or APP_SETTINGS.get("openai_api_key") or os.environ.get("OPENAI_API_KEY")),
         "require_ai_review": require_ai,
         "require_ai_review_default": stored_ai,
         "autofix_default": stored_autofix,
+        "override_allowed_default": stored_override_allowed,
         "ai_model": stored_model or (APP_SETTINGS.get("ai_model") if _is_global_scope() else None) or os.environ.get("OPENAI_MODEL") or "gpt-4o-mini",
         "ai_review_max_chars": stored_max_chars or (APP_SETTINGS.get("ai_review_max_chars") if _is_global_scope() else None) or int(os.environ.get("AI_REVIEW_MAX_CHARS", "12000")),
         "persistent_enabled": bool(os.environ.get("SETTINGS_ENC_KEY")),
@@ -477,6 +511,20 @@ def settings_ui():
                         <div id='enc-status' class='status muted'></div>
                     </div>
                     <div class='card'>
+                        <div class='section-title'>User token</div>
+                        <div id='token-value' class='status muted'>Loading token...</div>
+                        <div class='actions'>
+                            <button id='copyTokenBtn' type='button' class='btn ghost'>Copy token</button>
+                            <button id='regenTokenBtn' type='button' class='btn warning'>Regenerate token</button>
+                        </div>
+                        <label for='tokenInput' style='margin-top: 0.9rem;'>Set token manually</label>
+                        <input id='tokenInput' type='text' placeholder='Paste token from CLI' />
+                        <div class='actions'>
+                            <button id='setTokenBtn' type='button' class='btn'>Use this token</button>
+                        </div>
+                        <div class='status muted'>Use this token with <code>--user</code> or <code>X-Guardrails-User</code>.</div>
+                    </div>
+                    <div class='card'>
                         <div class='section-title'>Developer</div>
                         <div class='actions'>
                             <a class='btn ghost' href='/docs'>API Docs</a>
@@ -499,6 +547,15 @@ def settings_ui():
                             <button id='autofixOnBtn' type='button' class='btn alt' aria-pressed='false'>Enable auto-fix</button>
                             <button id='autofixOffBtn' type='button' class='btn ghost' aria-pressed='false'>Disable auto-fix</button>
                         </div>
+                    </div>
+                    <div class='card'>
+                        <div class='section-title'>Override blocking policy</div>
+                        <div id='override-status' class='status muted'>Loading override settings...</div>
+                        <div class='actions'>
+                            <button id='overrideOnBtn' type='button' class='btn alt' aria-pressed='false'>Allow override</button>
+                            <button id='overrideOffBtn' type='button' class='btn ghost' aria-pressed='false'>Disallow override</button>
+                        </div>
+                        <div class='status muted'>When enabled, blocking results can be overridden (for GitHub, apply the override label).</div>
                     </div>
                     <div class='card'>
                         <div class='section-title'>AI model</div>
@@ -537,12 +594,20 @@ def settings_ui():
             const encStatusEl = document.getElementById('enc-status');
             const aiModeEl = document.getElementById('ai-mode-status');
             const autofixEl = document.getElementById('autofix-status');
+            const overrideEl = document.getElementById('override-status');
+            const tokenValueEl = document.getElementById('token-value');
             const resultEl = document.getElementById('result');
             const saveBtn = document.getElementById('saveBtn');
             const aiOnBtn = document.getElementById('aiOnBtn');
             const aiOffBtn = document.getElementById('aiOffBtn');
             const autofixOnBtn = document.getElementById('autofixOnBtn');
             const autofixOffBtn = document.getElementById('autofixOffBtn');
+            const overrideOnBtn = document.getElementById('overrideOnBtn');
+            const overrideOffBtn = document.getElementById('overrideOffBtn');
+            const copyTokenBtn = document.getElementById('copyTokenBtn');
+            const regenTokenBtn = document.getElementById('regenTokenBtn');
+            const tokenInput = document.getElementById('tokenInput');
+            const setTokenBtn = document.getElementById('setTokenBtn');
             const aiModelStatus = document.getElementById('ai-model-status');
             const aiMaxStatus = document.getElementById('ai-max-status');
             const aiModelInput = document.getElementById('aiModelInput');
@@ -557,6 +622,7 @@ def settings_ui():
             async function ensureUserToken() {
                 const stored = localStorage.getItem('guardrails_user_token');
                 if (stored) {
+                    tokenValueEl.textContent = stored;
                     return stored;
                 }
                 try {
@@ -564,6 +630,7 @@ def settings_ui():
                     const data = await res.json();
                     if (data.user_token) {
                         localStorage.setItem('guardrails_user_token', data.user_token);
+                        tokenValueEl.textContent = data.user_token;
                         return data.user_token;
                     }
                 } catch (err) {
@@ -573,8 +640,63 @@ def settings_ui():
                 crypto.getRandomValues(array);
                 const token = Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('');
                 localStorage.setItem('guardrails_user_token', token);
+                tokenValueEl.textContent = token;
                 return token;
             }
+
+            async function regenerateToken() {
+                try {
+                    const res = await fetch('/settings/token');
+                    const data = await res.json();
+                    if (data.user_token) {
+                        localStorage.setItem('guardrails_user_token', data.user_token);
+                        tokenValueEl.textContent = data.user_token;
+                        return;
+                    }
+                } catch (err) {
+                    // fallback to random
+                }
+                const array = new Uint8Array(16);
+                crypto.getRandomValues(array);
+                const token = Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('');
+                localStorage.setItem('guardrails_user_token', token);
+                tokenValueEl.textContent = token;
+            }
+
+            copyTokenBtn.addEventListener('click', async () => {
+                const token = localStorage.getItem('guardrails_user_token') || '';
+                if (!token) {
+                    return;
+                }
+                try {
+                    await navigator.clipboard.writeText(token);
+                    copyTokenBtn.classList.add('pulse');
+                    setTimeout(() => copyTokenBtn.classList.remove('pulse'), 650);
+                } catch (err) {
+                    // ignore
+                }
+            });
+
+            regenTokenBtn.addEventListener('click', async () => {
+                await regenerateToken();
+                regenTokenBtn.classList.add('pulse');
+                setTimeout(() => regenTokenBtn.classList.remove('pulse'), 650);
+            });
+
+            setTokenBtn.addEventListener('click', async () => {
+                const value = tokenInput.value.trim();
+                if (!value) {
+                    resultEl.textContent = 'Token is required.';
+                    resultEl.className = 'status error';
+                    return;
+                }
+                localStorage.setItem('guardrails_user_token', value);
+                tokenValueEl.textContent = value;
+                tokenInput.value = '';
+                resultEl.textContent = 'Token updated locally.';
+                resultEl.className = 'status success';
+                await refreshStatus();
+            });
 
             async function refreshStatus() {
                 try {
@@ -627,6 +749,21 @@ def settings_ui():
                         autofixOnBtn.setAttribute('aria-pressed', 'false');
                         autofixOffBtn.setAttribute('aria-pressed', 'false');
                     }
+                    if (typeof data.override_allowed_default === 'boolean') {
+                        overrideEl.textContent = data.override_allowed_default
+                            ? 'Override is allowed for blocking policy.'
+                            : 'Override is disabled for blocking policy.';
+                        overrideOnBtn.classList.toggle('selected', !!data.override_allowed_default);
+                        overrideOffBtn.classList.toggle('selected', !data.override_allowed_default);
+                        overrideOnBtn.setAttribute('aria-pressed', data.override_allowed_default ? 'true' : 'false');
+                        overrideOffBtn.setAttribute('aria-pressed', data.override_allowed_default ? 'false' : 'true');
+                    } else {
+                        overrideEl.textContent = 'Override default is not set.';
+                        overrideOnBtn.classList.remove('selected');
+                        overrideOffBtn.classList.remove('selected');
+                        overrideOnBtn.setAttribute('aria-pressed', 'false');
+                        overrideOffBtn.setAttribute('aria-pressed', 'false');
+                    }
                     if (data.ai_model) {
                         aiModelStatus.textContent = `Current model: ${data.ai_model}`;
                         aiModelInput.value = data.ai_model;
@@ -643,6 +780,7 @@ def settings_ui():
                     statusEl.textContent = 'Unable to load status.';
                     aiModeEl.textContent = 'Unable to load AI mode.';
                     autofixEl.textContent = 'Unable to load auto-fix.';
+                    overrideEl.textContent = 'Unable to load override settings.';
                     aiModelStatus.textContent = 'Unable to load AI model.';
                     aiMaxStatus.textContent = 'Unable to load AI limit.';
                 }
@@ -748,6 +886,38 @@ def settings_ui():
 
             autofixOnBtn.addEventListener('click', () => setAutofixMode(true));
             autofixOffBtn.addEventListener('click', () => setAutofixMode(false));
+
+            async function setOverrideAllowed(value) {
+                resultEl.textContent = '';
+                resultEl.className = 'status';
+                const token = document.getElementById('settingsToken').value.trim();
+                try {
+                    const res = await fetch('/settings/override-allowed', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+                            ...(getUserToken() ? { 'X-Guardrails-User': getUserToken() } : {})
+                        },
+                        body: JSON.stringify({ override_allowed_default: value })
+                    });
+                    const data = await res.json();
+                    if (!res.ok) {
+                        throw new Error(data.error || 'Failed to update override setting.');
+                    }
+                    resultEl.textContent = 'Override setting updated.';
+                    resultEl.classList.add('success');
+                    (value ? overrideOnBtn : overrideOffBtn).classList.add('pulse');
+                    setTimeout(() => (value ? overrideOnBtn : overrideOffBtn).classList.remove('pulse'), 650);
+                    await refreshStatus();
+                } catch (err) {
+                    resultEl.textContent = err.message || 'Failed to update override setting.';
+                    resultEl.classList.add('error');
+                }
+            }
+
+            overrideOnBtn.addEventListener('click', () => setOverrideAllowed(true));
+            overrideOffBtn.addEventListener('click', () => setOverrideAllowed(false));
 
             async function setAiModel() {
                 resultEl.textContent = '';
@@ -946,6 +1116,27 @@ async def set_ai_max_chars(request: Request):
         })
     return JSONResponse({"result": "saved", "persistent": True})
 
+@app.post("/settings/override-allowed")
+async def set_override_allowed(request: Request):
+    auth_error = _require_settings_token(request)
+    if auth_error:
+        return JSONResponse({"error": auth_error}, status_code=401)
+    user_key = _get_user_scope_key(request)
+    if not _is_global_scope() and not user_key:
+        return JSONResponse({"error": "User scope required. Set X-Guardrails-User header."}, status_code=400)
+    data = await request.json()
+    value = data.get("override_allowed_default")
+    if not isinstance(value, bool):
+        return JSONResponse({"error": "override_allowed_default must be a boolean."}, status_code=400)
+    persisted = settings_store.save_override_allowed_default(value, user_key=user_key)
+    if not persisted:
+        return JSONResponse({
+            "result": "saved",
+            "persistent": False,
+            "warning": "SETTINGS_ENC_KEY not set; setting stored in memory only.",
+        })
+    return JSONResponse({"result": "saved", "persistent": True})
+
 @app.post("/analyze")
 async def analyze(request: Request):
     data = await request.json()
@@ -956,13 +1147,15 @@ async def analyze(request: Request):
     residency_error = _enforce_data_residency(repo_path)
     if residency_error:
         return JSONResponse({"error": residency_error}, status_code=400)
-    repo_license_issues = _collect_repo_license_issues(repo_path)
+    license_texts = data.get("repo_license_texts") if isinstance(data.get("repo_license_texts"), list) else None
+    repo_license_issues = _collect_repo_license_issues(repo_path, license_texts=license_texts)
     sector = _resolve_sector(data, repo_path)
     policy_override = _resolve_policy_override(data, repo_path)
     ai_key = _get_request_ai_key(request, data)
     require_ai_review = _resolve_require_ai_review(data, request=request)
     ai_model = _resolve_ai_model(data, request=request)
     ai_review_max_chars = _resolve_ai_review_max_chars(data, request=request)
+    user_key = _get_user_scope_key(request)
     ai_context = {
         "path": data.get("path"),
         "language": data.get("language"),
@@ -984,6 +1177,7 @@ async def analyze(request: Request):
         repo_license_issues=repo_license_issues,
         ai_model=ai_model,
         ai_review_max_chars=ai_review_max_chars,
+        user_key=user_key,
     )
     _apply_guidelines(analysis)
     request_id = str(uuid.uuid4())
@@ -997,7 +1191,7 @@ async def analyze(request: Request):
     audit_entry = {
         "request_id": request_id,
         "input": _sanitize_audit_input(data),
-        "output": result if audit_log.AUDIT_LOG_STORE_OUTPUT else _summarize_output(result),
+        "output": _sanitize_audit_output(result) if audit_log.AUDIT_LOG_STORE_OUTPUT else _summarize_output(result),
         "policy": analysis["policy"],
         "override_allowed": analysis["override_allowed"],
         "resolution": "unresolved",
@@ -1017,13 +1211,15 @@ async def analyze_batch(request: Request):
     residency_error = _enforce_data_residency(repo_path)
     if residency_error:
         return JSONResponse({"error": residency_error}, status_code=400)
-    repo_license_issues = _collect_repo_license_issues(repo_path)
+    license_texts = data.get("repo_license_texts") if isinstance(data.get("repo_license_texts"), list) else None
+    repo_license_issues = _collect_repo_license_issues(repo_path, license_texts=license_texts)
     sector = _resolve_sector(data, repo_path)
     policy_override = _resolve_policy_override(data, repo_path)
     ai_key = _get_request_ai_key(request, data)
     require_ai_review = _resolve_require_ai_review(data, request=request)
     ai_model = _resolve_ai_model(data, request=request)
     ai_review_max_chars = _resolve_ai_review_max_chars(data, request=request)
+    user_key = _get_user_scope_key(request)
 
     config = config_loader.load_config(repo_path)
     ip_min_lines = int(config.get("ip_min_lines", 6) or 6)
@@ -1063,6 +1259,7 @@ async def analyze_batch(request: Request):
             repo_license_issues=repo_license_issues,
             ai_model=ai_model,
             ai_review_max_chars=ai_review_max_chars,
+            user_key=user_key,
         )
         _apply_guidelines(analysis)
         findings[path] = {
@@ -1088,7 +1285,7 @@ async def analyze_batch(request: Request):
     audit_entry = {
         "request_id": request_id,
         "input": _sanitize_audit_input(data),
-        "output": result if audit_log.AUDIT_LOG_STORE_OUTPUT else _summarize_output(result),
+        "output": _sanitize_audit_output(result) if audit_log.AUDIT_LOG_STORE_OUTPUT else _summarize_output(result),
         "policy": policy_mode,
         "override_allowed": override_allowed,
         "resolution": "unresolved",
@@ -1183,7 +1380,9 @@ def _run_async_scan(job_id: str, payload: dict) -> None:
     require_ai_review = _resolve_require_ai_review(payload, request=None)
     ai_model = _resolve_ai_model(payload, request=None)
     ai_review_max_chars = _resolve_ai_review_max_chars(payload, request=None)
-    repo_license_issues = _collect_repo_license_issues(repo_path)
+    license_texts = payload.get("repo_license_texts") if isinstance(payload.get("repo_license_texts"), list) else None
+    repo_license_issues = _collect_repo_license_issues(repo_path, license_texts=license_texts)
+    user_key = payload.get("user_key")
     findings = {}
     policy_mode = "advisory"
     override_allowed = False
@@ -1211,6 +1410,7 @@ def _run_async_scan(job_id: str, payload: dict) -> None:
             repo_license_issues=repo_license_issues,
             ai_model=ai_model,
             ai_review_max_chars=ai_review_max_chars,
+            user_key=user_key,
         )
         _apply_guidelines(analysis)
         findings[path] = {"result": "analyzed", **analysis}

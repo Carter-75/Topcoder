@@ -17,6 +17,9 @@ This project is a secure, modular backend for code analysis, policy enforcement,
 - Python 3.9+
 - See `backend/requirements.txt` for all dependencies
 
+## Deployed URL
+https://topcoder-production.up.railway.app
+
 ## Installation
 1. Clone the repository.
 2. Navigate to the backend directory:
@@ -71,8 +74,11 @@ Website-only:
 CLI (most common):
 1) `pip install guardrails-cli`
 2) Open `/settings/ui` once and save your API key.
-3) Copy `guardrails_user_token` from browser local storage if `SETTINGS_SCOPE=user`.
-4) `guardrails scan <repo-path> --user <token>`
+3) Generate a user token (CLI or UI):
+   - CLI: `guardrails settings --issue-user-token`
+   - UI: `/settings/ui` shows and can regenerate the token
+4) Paste a CLI token into `/settings/ui` if you want to override the auto-generated token for this browser.
+5) `guardrails scan <repo-path> --user <token>` (path optional; defaults to current directory)
 
 ## Project layout
 - backend/ — FastAPI service and rule engine
@@ -110,6 +116,7 @@ Audit logging:
 - AUDIT_LOG_ENABLED (default: true)
 - AUDIT_LOG_PATH (default: audit_log.jsonl)
 - AUDIT_LOG_STORE_OUTPUT (default: true)
+   - Stored output is sanitized to avoid retaining code snippets or patches
 
 Data residency:
 - DATA_RESIDENCY (optional)
@@ -133,10 +140,12 @@ pip install guardrails-cli
 Scan:
 ```sh
 guardrails scan <repo-path> --user <token>
+# Or, from inside your repo:
+guardrails scan --user <token>
 ```
 
 Notes:
-- Default hosted URL is https://topcoder-production.up.railway.app
+- Hosted URL: https://topcoder-production.up.railway.app
 - Override with GUARDRAILS_API_URL or --api
 - Use --autofix to apply safe local fixes
 - Use --no-ai to disable AI review for a run
@@ -147,6 +156,7 @@ python guardrails.py settings --generate-local-key
 python guardrails.py settings --set-api-key <key>
 python guardrails.py settings --ai-mode require|allow
 python guardrails.py settings --autofix-mode on|off
+guardrails settings --issue-user-token
 python guardrails.py settings --verify
 ```
 
@@ -160,6 +170,7 @@ python guardrails.py settings --verify
 - POST /settings/api-key
 - POST /settings/ai-mode
 - POST /settings/autofix-mode
+- POST /settings/override-allowed
 - POST /analyze
 - POST /analyze-batch
 - POST /scan/async

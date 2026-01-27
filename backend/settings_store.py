@@ -139,3 +139,17 @@ def save_ai_review_max_chars(value: int, user_key: str | None = None) -> bool:
     settings = load_user_settings(user_key)
     settings["ai_review_max_chars"] = value
     return save_user_settings(user_key, settings)
+
+
+def load_override_allowed_default(user_key: str | None = None) -> Optional[bool]:
+    settings = load_user_settings(user_key)
+    value = settings.get("override_allowed_default")
+    if isinstance(value, bool):
+        return value
+    return None
+
+
+def save_override_allowed_default(value: bool, user_key: str | None = None) -> bool:
+    settings = load_user_settings(user_key)
+    settings["override_allowed_default"] = value
+    return save_user_settings(user_key, settings)

@@ -20,6 +20,15 @@ const MAX_FILES = Number(process.env.MAX_FILES || 100);
 const MAX_FILE_BYTES = Number(process.env.MAX_FILE_BYTES || 200_000);
 const OVERRIDE_LABEL = process.env.OVERRIDE_LABEL || "guardrails-override";
 const REVIEW_MARKER = "<!-- guardrails-review -->";
+const LICENSE_FILES = [
+  "LICENSE",
+  "LICENSE.txt",
+  "LICENSE.md",
+  "COPYING",
+  "COPYING.txt",
+  "NOTICE",
+  "NOTICE.txt",
+];
 
 const supportedExtensions = new Set([
   ".py",
@@ -114,6 +123,26 @@ const fetchGuardrailsConfig = async (context: Context, owner: string, repo: stri
     }
   }
   return {};
+};
+
+const fetchLicenseTexts = async (context: Context, owner: string, repo: string, ref: string) => {
+  const texts: Array<{ path: string; content: string }> = [];
+  for (const filename of LICENSE_FILES) {
+    try {
+      const res = await context.octokit.repos.getContent({ owner, repo, path: filename, ref });
+      if (Array.isArray(res.data) || !("content" in res.data)) {
+        continue;
+      }
+      const raw = decodeContent(res.data.content, res.data.encoding);
+      if (!raw || raw.length > MAX_FILE_BYTES) {
+        continue;
+      }
+      texts.push({ path: filename, content: raw });
+    } catch (error) {
+      continue;
+    }
+  }
+  return texts;
 };
 
 const summarizeFindings = (result: AnalyzeBatchResponse) => {
@@ -353,6 +382,7 @@ export = (app: Probot) => {
 
     const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
     const useAsync = process.env.USE_ASYNC_SCAN === "true";
+    const repoLicenseTexts = await fetchLicenseTexts(context, owner, repoName, ref);
     const requestPayload = {
       pr_number: pr.number,
       repo: repo.full_name,
@@ -362,6 +392,7 @@ export = (app: Probot) => {
       policy: config.policy,
       ai_generated: aiGenerated,
       repo_path: repo.full_name,
+      repo_license_texts: repoLicenseTexts,
     };
     let result: AnalyzeBatchResponse | null = null;
     if (useAsync) {
@@ -506,6 +537,7 @@ export = (app: Probot) => {
     const aiGenerated = payload.commits?.some((commit: any) => detectCopilot(commit.message)) || false;
     const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
     const useAsync = process.env.USE_ASYNC_SCAN === "true";
+    const repoLicenseTexts = await fetchLicenseTexts(context, owner, repoName, headSha);
     const requestPayload = {
       commit: headSha,
       repo: repo.full_name,
@@ -513,6 +545,7 @@ export = (app: Probot) => {
       sector: "finance",
       ai_generated: aiGenerated,
       repo_path: repo.full_name,
+      repo_license_texts: repoLicenseTexts,
     };
 
     let result: AnalyzeBatchResponse | null = null;

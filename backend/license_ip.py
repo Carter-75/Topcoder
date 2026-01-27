@@ -122,6 +122,22 @@ def scan_repo_licenses(repo_path: str) -> List[str]:
                 continue
     return detected
 
+
+def scan_license_texts(texts: List[Dict[str, str]]) -> List[str]:
+    detected: List[str] = []
+    for item in texts:
+        content = item.get("content", "")
+        if not content:
+            continue
+        for pat, lic in LICENSE_PATTERNS:
+            for match in re.finditer(pat, content, re.IGNORECASE):
+                license_name = lic
+                if lic == "spdx":
+                    license_name = match.group(1)
+                if license_name not in detected:
+                    detected.append(license_name)
+    return detected
+
 def detect_cross_file_duplicates(
     file_map: Dict[str, str],
     min_lines: int = 6,

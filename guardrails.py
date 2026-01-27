@@ -13,7 +13,7 @@ def main() -> int:
     sub = parser.add_subparsers(dest="command", required=True)
 
     scan = sub.add_parser("scan", help="Scan a repository")
-    scan.add_argument("repo", help="Path to the repository root")
+    scan.add_argument("repo", nargs="?", default=".", help="Path to the repository root (defaults to current directory)")
     scan.add_argument("--api", default=os.environ.get("GUARDRAILS_API_URL", "https://topcoder-production.up.railway.app"), help="Guardrails API base URL")
     scan.add_argument("--sector", default="finance", help="Sector rulepack to apply")
     scan.add_argument("--output", default="scan_results.json", help="Output JSON file")
@@ -35,6 +35,7 @@ def main() -> int:
     settings.add_argument("--set-api-key", default="", help="Set API key in hosted settings")
     settings.add_argument("--ai-mode", choices=["require", "allow"], help="Set default AI mode (require or allow non-AI)")
     settings.add_argument("--autofix-mode", choices=["on", "off"], help="Set default auto-fix mode")
+    settings.add_argument("--issue-user-token", action="store_true", help="Generate a user token and print it")
     settings.add_argument("--generate-local-key", action="store_true", help="Generate a local settings encryption key")
     settings.add_argument("--verify", action="store_true", help="Verify settings sync with the server")
 
@@ -80,6 +81,16 @@ def main() -> int:
         if args.generate_local_key:
             print(Fernet.generate_key().decode("utf-8"))
             return 0
+        if args.issue_user_token:
+            res = requests.post(f"{api_base}/settings/token", timeout=15)
+            res.raise_for_status()
+            data = res.json()
+            token = data.get("user_token")
+            if token:
+                print(token)
+                return 0
+            print("Failed to generate user token.")
+            return 1
         if args.set_api_key:
             res = requests.post(
                 f"{api_base}/settings/api-key",
