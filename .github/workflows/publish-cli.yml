@@ -1,0 +1,120 @@
+name: publish-cli
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Auto-bump version on CLI changes
+        id: bump
+        run: |
+          python - <<'PY'
+          import re
+          import subprocess
+          from pathlib import Path
+
+          def run(cmd: str) -> str:
+              return subprocess.check_output(cmd, shell=True, text=True).strip()
+
+          diff = run("git diff --name-only HEAD^ HEAD")
+          changed = [line for line in diff.splitlines() if line]
+          bump_paths = (
+              "src/guardrails_cli/",
+              "pyproject.toml",
+              "README.md",
+          )
+          if not any(path.startswith(bump_paths) for path in changed):
+              print("No CLI changes detected; skipping bump.")
+              Path("bump.env").write_text("bumped=false\n", encoding="utf-8")
+              return
+
+          pyproject = Path("pyproject.toml")
+          text = pyproject.read_text(encoding="utf-8")
+          match = re.search(r"^version\s*=\s*\"(\d+)\.(\d+)\.(\d+)\"", text, re.MULTILINE)
+          if not match:
+              raise SystemExit("Version not found in pyproject.toml")
+          major, minor, patch = map(int, match.groups())
+          patch += 1
+          new_version = f"{major}.{minor}.{patch}"
+          updated = re.sub(
+              r"^version\s*=\s*\"(\d+)\.(\d+)\.(\d+)\"",
+              f'version = "{new_version}"',
+              text,
+              flags=re.MULTILINE,
+          )
+          pyproject.write_text(updated, encoding="utf-8")
+
+          run("git config user.name 'github-actions[bot]'")
+          run("git config user.email '41898282+github-actions[bot]@users.noreply.github.com'")
+          run("git add pyproject.toml")
+          run(f"git commit -m 'chore(cli): bump version to {new_version}'")
+          run("git push")
+          Path("bump.env").write_text(f"bumped=true\nversion={new_version}\n", encoding="utf-8")
+          PY
+
+      - name: Load bump metadata
+        id: bumpmeta
+        run: |
+          if [ -f bump.env ]; then
+            cat bump.env >> $GITHUB_ENV
+          fi
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install build tooling
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build packaging requests
+
+      - name: Determine publish need
+        id: version
+        run: |
+          python - <<'PY'
+          import json
+          import sys
+          import urllib.request
+          from pathlib import Path
+          from packaging.version import Version
+          from os import environ
+
+          pyproject = Path("pyproject.toml").read_text(encoding="utf-8")
+          version_line = next((line for line in pyproject.splitlines() if line.strip().startswith("version")), None)
+          if not version_line:
+            Path(environ["GITHUB_OUTPUT"]).write_text("publish=false\n", encoding="utf-8")
+            sys.exit(0)
+          version = version_line.split("=")[1].strip().strip('"')
+          package = "guardrails-cli"
+
+          try:
+            with urllib.request.urlopen(f"https://pypi.org/pypi/{package}/json", timeout=10) as resp:
+              data = json.loads(resp.read().decode("utf-8"))
+              releases = data.get("releases", {})
+              if version in releases:
+                Path(environ["GITHUB_OUTPUT"]).write_text("publish=false\n", encoding="utf-8")
+                print(f"Version {version} already on PyPI.")
+                sys.exit(0)
+          except Exception:
+            pass
+
+          Path(environ["GITHUB_OUTPUT"]).write_text("publish=true\n", encoding="utf-8")
+          print(f"Publishing version {version}.")
+          PY
+
+      - name: Build package
+        if: steps.version.outputs.publish == 'true'
+        run: python -m build
+
+      - name: Publish to PyPI
+        if: steps.version.outputs.publish == 'true'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}

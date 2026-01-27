@@ -5,7 +5,7 @@ from typing import List
 import requests
 from cryptography.fernet import Fernet
 
-from backend import scan_repo
+from guardrails_cli import scan_repo
 
 
 def main() -> int:

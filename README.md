@@ -41,6 +41,11 @@ This app is **per-user**, not global. Settings are scoped by user token when `SE
 
 Local-only (optional):
 - Set `OPENAI_API_KEY` only if you are running locally and want AI review without using the settings UI/CLI.
+
+Railway note (important):
+- Railway containers use an ephemeral filesystem on redeploys. If you rely on the settings UI/CLI to store the API key, it will be lost unless you persist the settings file.
+- Fix: use a persistent key file + settings file on a Railway volume. Example: attach a volume at `/data`, then set `SETTINGS_KEY_PATH=/data/settings.key` and `SETTINGS_STORE_PATH=/data/settings.enc`. The key file is created on first boot and reused on redeploys.
+- If you do not want to persist a file, set `OPENAI_API_KEY` as an environment variable in Railway so the key is always present after redeploys.
 # Guardrails Backend
 
 FastAPI-based service that analyzes code, applies policy/rulepacks, and reports results for PRs, commits, and local scans. It ships with a settings UI, audit logging, and a lightweight CLI for scanning any repository.
@@ -109,6 +114,7 @@ Core settings:
 - SETTINGS_SCOPE (default: global) — global | user | ip
 - SETTINGS_TOKEN (optional) — protects settings endpoints
 - SETTINGS_ENC_KEY (recommended) — encrypts persisted settings
+- SETTINGS_KEY_PATH (optional) — path to a persistent encryption key file (auto-created when missing)
 - SETTINGS_STORE_PATH (default: settings.enc) — encrypted settings file
 - REQUIRE_AI_REVIEW_DEFAULT (default: false)
 

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import os
 from typing import Optional, Dict, Any
@@ -65,7 +67,7 @@ def save_settings(settings: Dict[str, Any]) -> bool:
     return True
 
 
-def load_user_settings(user_key: str | None) -> Dict[str, Any]:
+def load_user_settings(user_key: Optional[str]) -> Dict[str, Any]:
     settings = load_settings()
     if not user_key:
         return settings
@@ -77,7 +79,7 @@ def load_user_settings(user_key: str | None) -> Dict[str, Any]:
     return {}
 
 
-def save_user_settings(user_key: str | None, user_settings: Dict[str, Any]) -> bool:
+def save_user_settings(user_key: Optional[str], user_settings: Dict[str, Any]) -> bool:
     settings = load_settings()
     if not user_key:
         return save_settings({**settings, **user_settings})
@@ -89,18 +91,18 @@ def save_user_settings(user_key: str | None, user_settings: Dict[str, Any]) -> b
     return save_settings(settings)
 
 
-def load_api_key(user_key: str | None = None) -> Optional[str]:
+def load_api_key(user_key: Optional[str] = None) -> Optional[str]:
     settings = load_user_settings(user_key)
     return settings.get("openai_api_key")
 
 
-def save_api_key(api_key: str, user_key: str | None = None) -> bool:
+def save_api_key(api_key: str, user_key: Optional[str] = None) -> bool:
     settings = load_user_settings(user_key)
     settings["openai_api_key"] = api_key
     return save_user_settings(user_key, settings)
 
 
-def load_require_ai_review_default(user_key: str | None = None) -> Optional[bool]:
+def load_require_ai_review_default(user_key: Optional[str] = None) -> Optional[bool]:
     settings = load_user_settings(user_key)
     value = settings.get("require_ai_review_default")
     if isinstance(value, bool):
@@ -108,13 +110,13 @@ def load_require_ai_review_default(user_key: str | None = None) -> Optional[bool
     return None
 
 
-def save_require_ai_review_default(value: bool, user_key: str | None = None) -> bool:
+def save_require_ai_review_default(value: bool, user_key: Optional[str] = None) -> bool:
     settings = load_user_settings(user_key)
     settings["require_ai_review_default"] = value
     return save_user_settings(user_key, settings)
 
 
-def load_autofix_default(user_key: str | None = None) -> Optional[bool]:
+def load_autofix_default(user_key: Optional[str] = None) -> Optional[bool]:
     settings = load_user_settings(user_key)
     value = settings.get("autofix_default")
     if isinstance(value, bool):
@@ -122,13 +124,13 @@ def load_autofix_default(user_key: str | None = None) -> Optional[bool]:
     return None
 
 
-def save_autofix_default(value: bool, user_key: str | None = None) -> bool:
+def save_autofix_default(value: bool, user_key: Optional[str] = None) -> bool:
     settings = load_user_settings(user_key)
     settings["autofix_default"] = value
     return save_user_settings(user_key, settings)
 
 
-def load_ai_model(user_key: str | None = None) -> Optional[str]:
+def load_ai_model(user_key: Optional[str] = None) -> Optional[str]:
     settings = load_user_settings(user_key)
     value = settings.get("ai_model")
     if isinstance(value, str) and value.strip():
@@ -136,13 +138,13 @@ def load_ai_model(user_key: str | None = None) -> Optional[str]:
     return None
 
 
-def save_ai_model(value: str, user_key: str | None = None) -> bool:
+def save_ai_model(value: str, user_key: Optional[str] = None) -> bool:
     settings = load_user_settings(user_key)
     settings["ai_model"] = value.strip()
     return save_user_settings(user_key, settings)
 
 
-def load_ai_review_max_chars(user_key: str | None = None) -> Optional[int]:
+def load_ai_review_max_chars(user_key: Optional[str] = None) -> Optional[int]:
     settings = load_user_settings(user_key)
     value = settings.get("ai_review_max_chars")
     if isinstance(value, int) and value > 0:
@@ -150,13 +152,13 @@ def load_ai_review_max_chars(user_key: str | None = None) -> Optional[int]:
     return None
 
 
-def save_ai_review_max_chars(value: int, user_key: str | None = None) -> bool:
+def save_ai_review_max_chars(value: int, user_key: Optional[str] = None) -> bool:
     settings = load_user_settings(user_key)
     settings["ai_review_max_chars"] = value
     return save_user_settings(user_key, settings)
 
 
-def load_override_allowed_default(user_key: str | None = None) -> Optional[bool]:
+def load_override_allowed_default(user_key: Optional[str] = None) -> Optional[bool]:
     settings = load_user_settings(user_key)
     value = settings.get("override_allowed_default")
     if isinstance(value, bool):
@@ -164,7 +166,7 @@ def load_override_allowed_default(user_key: str | None = None) -> Optional[bool]
     return None
 
 
-def save_override_allowed_default(value: bool, user_key: str | None = None) -> bool:
+def save_override_allowed_default(value: bool, user_key: Optional[str] = None) -> bool:
     settings = load_user_settings(user_key)
     settings["override_allowed_default"] = value
     return save_user_settings(user_key, settings)
