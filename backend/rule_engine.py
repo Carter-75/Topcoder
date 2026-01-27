@@ -1,4 +1,5 @@
 import os
+import re
 import yaml
 from typing import List, Dict, Any
 
@@ -18,13 +19,20 @@ def load_rulepack(sector: str) -> List[Dict[str, Any]]:
 def apply_rulepack_rules(code: str, rules: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     issues = []
     for rule in rules:
-        for match in yaml.safe_load(f"- {rule['pattern']}") if isinstance(rule['pattern'], str) else rule['pattern']:
-            if match and match in code:
+        pattern_value = rule.get("pattern")
+        if not pattern_value:
+            continue
+
+        patterns = pattern_value if isinstance(pattern_value, list) else [pattern_value]
+        for pattern in patterns:
+            if not pattern:
+                continue
+            if re.search(pattern, code):
                 issues.append({
                     "type": rule["type"],
                     "message": rule["message"],
                     "severity": rule["severity"],
                     "rule_id": rule["id"],
-                    "pattern": match
+                    "pattern": pattern
                 })
     return issues
