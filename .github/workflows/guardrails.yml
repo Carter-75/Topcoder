@@ -14,7 +14,7 @@ jobs:
         id: config
         run: |
           if [ -f .guardrails/config.yml ]; then
-            echo "CONFIG=$(cat .guardrails/config.yml | base64)" >> $GITHUB_ENV
+            echo "CONFIG=$(base64 -w 0 .guardrails/config.yml)" >> $GITHUB_ENV
           fi
       - name: Run Guardrails App
         uses: ./github-app
