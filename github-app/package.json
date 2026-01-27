@@ -4,7 +4,8 @@
   "main": "index.js",
   "types": "index.d.ts",
   "scripts": {
-    "start": "probot run ./index.ts"
+    "build": "tsc",
+    "start": "probot run ./dist/index.js"
   },
   "dependencies": {
     "probot": "^13.0.0",
