@@ -60,11 +60,17 @@ def save_settings(settings: Dict[str, Any]) -> bool:
         _MEMORY_SETTINGS.clear()
         _MEMORY_SETTINGS.update(settings)
         return True
-    payload = json.dumps(settings).encode("utf-8")
-    encrypted = fernet.encrypt(payload)
-    with open(store_path, "wb") as f:
-        f.write(encrypted)
-    return True
+    try:
+        parent = os.path.dirname(store_path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        payload = json.dumps(settings).encode("utf-8")
+        encrypted = fernet.encrypt(payload)
+        with open(store_path, "wb") as f:
+            f.write(encrypted)
+        return True
+    except OSError:
+        return False
 
 
 def load_user_settings(user_key: Optional[str]) -> Dict[str, Any]:
