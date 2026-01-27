@@ -30,7 +30,7 @@ jobs:
           if last_author == "github-actions[bot]" or "chore(cli): bump version" in last_message:
               print("Last commit is an auto-bump; skipping bump.")
               Path("bump.env").write_text("bumped=false\n", encoding="utf-8")
-              return
+              raise SystemExit(0)
 
           diff = run("git diff --name-only HEAD^ HEAD")
           changed = [line for line in diff.splitlines() if line]
