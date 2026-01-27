@@ -134,13 +134,32 @@ def main(argv: List[str] | None = None) -> int:
     else:
         autofix_enabled = None
         try:
+            settings_headers = {"X-Guardrails-User": user_key} if user_key else None
             settings_res = requests.get(
                 f"{args.api.rstrip('/')}/settings",
-                headers={"X-Guardrails-User": user_key} if user_key else None,
+                headers=settings_headers,
                 timeout=10,
             )
             if settings_res.ok:
                 data = settings_res.json()
+                if data.get("settings_scope") == "user" and not user_key:
+                    if os.isatty(0):
+                        prompt = "User token required. Paste your token or press Enter to generate one: "
+                        entered = input(prompt).strip()
+                        if entered:
+                            user_key = entered
+                        else:
+                            user_key = os.urandom(16).hex()
+                            print(f"Generated user token: {user_key}")
+                        settings_headers = {"X-Guardrails-User": user_key}
+                        settings_res = requests.get(
+                            f"{args.api.rstrip('/')}/settings",
+                            headers=settings_headers,
+                            timeout=10,
+                        )
+                        data = settings_res.json() if settings_res.ok else data
+                    else:
+                        raise RuntimeError("Missing user token for user-scoped settings.")
                 if isinstance(data.get("autofix_default"), bool):
                     autofix_enabled = data["autofix_default"]
         except Exception:

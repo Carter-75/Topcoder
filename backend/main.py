@@ -230,7 +230,7 @@ def settings_ui():
     <body>
         <div class='container'>
             <h1>Guardrails Settings</h1>
-            <p class='muted'>Store your OpenAI API key for Guardrails scans. If <b>SETTINGS_TOKEN</b> is configured on the server, include it below. Use the AI mode buttons to require AI or allow non-AI by default. If <b>SETTINGS_SCOPE=user</b> is enabled, settings are scoped to your user token.</p>
+            <p class='muted'>Store your OpenAI API key for Guardrails scans. If <b>SETTINGS_TOKEN</b> is configured on the server, include it below. Use the AI mode buttons to require AI or allow non-AI by default. When <b>SETTINGS_SCOPE=user</b> is enabled, settings are scoped to your user token.</p>
 
             <div class='card'>
                 <div id='current-status' class='status muted'>Checking current status...</div>
@@ -267,6 +267,7 @@ def settings_ui():
                 <button id='saveBtn'>Save Key</button>
                 <button id='genKeyBtn' type='button' style='background:#546e7a;'>Generate Settings Key</button>
                 <button id='genUserBtn' type='button' style='background:#00897b;'>Generate User Token</button>
+                <button id='setUserBtn' type='button' style='background:#00796b;'>Use User Token</button>
             </div>
             <div id='result' class='status'></div>
             <div id='genResult' class='status'></div>
@@ -286,6 +287,7 @@ def settings_ui():
             const autofixOffBtn = document.getElementById('autofixOffBtn');
             const userTokenInput = document.getElementById('userToken');
             const genUserBtn = document.getElementById('genUserBtn');
+            const setUserBtn = document.getElementById('setUserBtn');
 
             function getUserToken() {
                 return userTokenInput.value.trim();
@@ -474,6 +476,19 @@ def settings_ui():
                 refreshStatus();
             });
 
+            setUserBtn.addEventListener('click', () => {
+                const token = getUserToken();
+                if (!token) {
+                    resultEl.textContent = 'User token is required.';
+                    resultEl.classList.add('error');
+                    return;
+                }
+                localStorage.setItem('guardrails_user_token', token);
+                resultEl.textContent = `User token set: ${token}`;
+                resultEl.classList.add('success');
+                refreshStatus();
+            });
+
             ensureUserToken();
             refreshStatus();
         </script>
@@ -561,6 +576,8 @@ async def set_autofix_mode(request: Request):
 @app.post("/analyze")
 async def analyze(request: Request):
     data = await request.json()
+    if not _is_global_scope() and not _get_user_scope_key(request):
+        return JSONResponse({"error": "User scope required. Set X-Guardrails-User header."}, status_code=400)
     code = data.get("code", "")
     repo_path = data.get("repo_path", ".")
     residency_error = _enforce_data_residency(repo_path)
@@ -596,6 +613,8 @@ async def analyze(request: Request):
 @app.post("/analyze-batch")
 async def analyze_batch(request: Request):
     data = await request.json()
+    if not _is_global_scope() and not _get_user_scope_key(request):
+        return JSONResponse({"error": "User scope required. Set X-Guardrails-User header."}, status_code=400)
     files = data.get("files", [])
     repo_path = data.get("repo_path", ".")
     residency_error = _enforce_data_residency(repo_path)

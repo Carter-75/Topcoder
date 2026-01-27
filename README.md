@@ -31,13 +31,11 @@ This project is a secure, modular backend for code analysis, policy enforcement,
    ```
 
 ## Configuration
-- Copy `.env.example` to `.env` and set your API key:
-  ```sh
-  cp .env.example .env
-  # Edit .env and set API_KEY=your-key-here
-  ```
-- The API key (`OPENAI_API_KEY`) is required for AI review; by default, scans are blocked if it is missing.
-- Optional: set `REQUIRE_AI_REVIEW=false` to allow stubbed AI suggestions in local/dev.
+This app is **per-user**, not global. Settings are scoped by user token when `SETTINGS_SCOPE=user`.
+
+Local-only (optional):
+- Set `OPENAI_API_KEY` only if you are running locally and want AI review without using the settings UI/CLI.
+- Optional: set `REQUIRE_AI_REVIEW=false` for local/dev to allow non-AI runs.
 
 Audit logging:
 - `AUDIT_LOG_ENABLED` (default: true)
@@ -50,7 +48,7 @@ Data residency:
 Persistent settings (encrypted):
 - `SETTINGS_ENC_KEY` (required for persistence) — a Fernet key used to encrypt stored settings
 - `SETTINGS_STORE_PATH` (optional) — file path for encrypted storage (default: `settings.enc`)
-- `SETTINGS_SCOPE` (optional) — `user` (recommended) or `global` (shared)
+- `SETTINGS_SCOPE` (recommended: `user`) — `user` keeps settings per user token
 - `REQUIRE_AI_REVIEW_DEFAULT` (optional) — default AI mode when user settings are not set (default: false)
 
 ## Running the Server
@@ -73,14 +71,14 @@ Environment variables:
 The app reads `.guardrails/config.yml|yaml|json` from the repo when available to apply `sector` and `policy` overrides.
 
 ## Hosted usage (no repo cloning)
-If you deploy the backend as a hosted service, users can supply their own OpenAI key without cloning or installing anything:
+If you deploy the backend as a hosted service, users can supply their own OpenAI key without cloning or installing anything.
 
-- Set a server-wide key once (main app settings):
-   - `POST /settings/api-key` with JSON `{ "api_key": "..." }`
-   - Optional protection: set `SETTINGS_TOKEN` and call with `Authorization: Bearer <token>`
-- Or send per-request keys from any client:
-   - Header: `X-OpenAI-API-Key: <key>` (or `X-OpenAI-Key`)
-   - Body: `ai_api_key` also supported for API clients
+Per-user flow (required when `SETTINGS_SCOPE=user`):
+- The UI generates a **User Token** and stores it locally in the browser
+- All settings are saved per token
+
+Optional protection:
+- Set `SETTINGS_TOKEN` to protect the settings endpoints
 
 This enables scanning any connected GitHub repo via the app, or calling the API directly from external tools.
 
@@ -89,6 +87,7 @@ Settings UI:
 - Open `/settings/ui` on the website to store the key in the main app.
 - Auto-fix default and AI mode can be set in the UI and used by the CLI.
 - When `SETTINGS_SCOPE=user`, the UI generates a per-user token and stores it locally.
+- You can also paste an existing token (from CLI) and click “Use User Token”.
 
 ## CLI usage (scan any local repo)
 Use the lightweight CLI wrapper to scan any repo from its root:
@@ -101,6 +100,7 @@ Use the lightweight CLI wrapper to scan any repo from its root:
 - Use `--no-ai` to explicitly disable AI review for that run
 - If `SETTINGS_ENC_KEY` is set locally, the CLI saves the entered key to encrypted storage
 - For `SETTINGS_SCOPE=user`, pass `--user <token>` or set `GUARDRAILS_USER` to match the UI token
+- If no token is provided, the CLI prompts to paste one or generates a new token
 
 One-time install (cross-platform, Python only):
 - Run `python install-cli.py` from this repo to add `guardrails` to your PATH
@@ -153,6 +153,12 @@ Run all backend tests:
 ```sh
 pytest
 ```
+
+Manual end-to-end usage (what you actually do):
+1) Open `/settings/ui` and generate a User Token (required when `SETTINGS_SCOPE=user`).
+2) Paste your OpenAI API key and set AI/Auto-fix defaults.
+3) From any repo, run `guardrails scan . --user <token>`.
+4) Confirm the scan results in `scan_results.json` and audit entries in the dashboard.
 
 ## Notes
 - All dependencies are listed in `requirements.txt`.
