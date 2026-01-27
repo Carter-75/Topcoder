@@ -123,10 +123,24 @@ def main(argv: Optional[List[str]] = None) -> int:
     ai_review_max_chars = args.ai_max_chars if args.ai_max_chars > 0 else 0
     user_key = args.user.strip() or None
     require_ai_review: Optional[bool] = None
+    server_has_key = False
+
+    if not api_key and user_key:
+        try:
+            settings_res = requests.get(
+                f"{args.api.rstrip('/')}/settings",
+                headers={"X-Guardrails-User": user_key},
+                timeout=10,
+            )
+            if settings_res.ok:
+                data = settings_res.json()
+                server_has_key = bool(data.get("openai_api_key_set"))
+        except Exception:
+            server_has_key = False
 
     if args.no_ai:
         require_ai_review = False
-    elif not api_key and os.isatty(0):
+    elif not api_key and not server_has_key and os.isatty(0):
         try:
             answer = input("No API key detected. Enter key to enable AI review, or press Enter to run in non-AI mode: ").strip()
             if answer:
