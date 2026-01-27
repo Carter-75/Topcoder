@@ -9,10 +9,12 @@
   },
   "dependencies": {
     "probot": "^13.0.0",
-    "node-fetch": "^2.6.7"
+    "node-fetch": "^2.6.7",
+    "js-yaml": "^4.1.0"
   },
   "devDependencies": {
     "typescript": "^5.0.0",
-    "@types/node-fetch": "^2.6.12"
+    "@types/node-fetch": "^2.6.12",
+    "@types/js-yaml": "^4.0.9"
   }
 }
