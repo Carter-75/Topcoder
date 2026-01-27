@@ -5,8 +5,9 @@ from typing import List, Dict, Any
 
 import requests
 
-def ai_review(code: str) -> List[Dict[str, Any]]:
-    api_key = os.environ.get("OPENAI_API_KEY")
+def ai_review(code: str, api_key_override: str | None = None) -> List[Dict[str, Any]]:
+    api_key = api_key_override or os.environ.get("OPENAI_API_KEY")
+    require_ai = os.environ.get("REQUIRE_AI_REVIEW", "true").lower() == "true"
     if api_key:
         # Use OpenAI API for real AI review
         try:
@@ -39,7 +40,14 @@ def ai_review(code: str) -> List[Dict[str, Any]]:
                 return [{"type": "ai_review", "message": content, "severity": "advisory"}]
         except Exception as e:
             return [{"type": "ai_review_error", "message": str(e), "severity": "warning"}]
-    # Fallback to stub if no API key
+    if require_ai:
+        return [{
+            "type": "ai_review_missing_key",
+            "message": "OPENAI_API_KEY is required for AI review.",
+            "explanation": "Set OPENAI_API_KEY in the environment to enable AI review for all scans.",
+            "severity": "blocking",
+        }]
+    # Fallback to stub if no API key and AI review is not required
     suggestions = []
     if "print(" in code:
         suggestions.append({

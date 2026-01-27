@@ -18,6 +18,7 @@ type AnalyzeBatchResponse = {
 const MAX_FILES = Number(process.env.MAX_FILES || 100);
 const MAX_FILE_BYTES = Number(process.env.MAX_FILE_BYTES || 200_000);
 const OVERRIDE_LABEL = process.env.OVERRIDE_LABEL || "guardrails-override";
+const REVIEW_MARKER = "<!-- guardrails-review -->";
 
 const supportedExtensions = new Set([
   ".py",
@@ -164,6 +165,77 @@ const buildAnnotations = (result: AnalyzeBatchResponse, fileCode: Record<string,
   return annotations.slice(0, 50);
 };
 
+const buildDiffLineIndex = (patch?: string) => {
+  const lines = patch?.split("\n") || [];
+  const lineSet = new Set<number>();
+  let rightLine = 0;
+  for (const raw of lines) {
+    if (raw.startsWith("@@")) {
+      const match = raw.match(/\+([0-9]+)(?:,([0-9]+))?/);
+      if (match) {
+        rightLine = Number(match[1]);
+      }
+      continue;
+    }
+    if (raw.startsWith("+++") || raw.startsWith("---")) {
+      continue;
+    }
+    if (raw.startsWith("+")) {
+      lineSet.add(rightLine);
+      rightLine += 1;
+      continue;
+    }
+    if (raw.startsWith("-")) {
+      continue;
+    }
+    lineSet.add(rightLine);
+    rightLine += 1;
+  }
+  return lineSet;
+};
+
+const buildReviewComments = (
+  result: AnalyzeBatchResponse,
+  fileCode: Record<string, string>,
+  diffLines: Record<string, Set<number>>,
+  existingKeys: Set<string>,
+) => {
+  const comments: Array<any> = [];
+  for (const [path, analysis] of Object.entries(result.findings)) {
+    const code = fileCode[path];
+    const allowedLines = diffLines[path];
+    if (!code || !allowedLines) continue;
+    const lineIndex = buildLineIndex(code);
+    const allIssues = [
+      ...(analysis.issues || []),
+      ...(analysis.coding_issues || []),
+      ...(analysis.license_ip_issues || []),
+      ...(analysis.sector_issues || []),
+    ];
+    for (const issue of allIssues) {
+      let line = issue.line || null;
+      if (!line && typeof issue.start === "number") {
+        line = offsetToLine(lineIndex, issue.start);
+      }
+      if (!line || !allowedLines.has(line)) continue;
+      const messageParts = [issue.message || issue.type];
+      if (issue.suggestion) messageParts.push(`Suggestion: ${issue.suggestion}`);
+      if (issue.owasp) messageParts.push(`OWASP: ${issue.owasp}`);
+      if (issue.cwe) messageParts.push(`CWE: ${issue.cwe}`);
+      const body = `${messageParts.join("\n")}\n${REVIEW_MARKER}`;
+      const key = `${path}:${line}:${body}`;
+      if (existingKeys.has(key)) continue;
+      comments.push({
+        path,
+        line,
+        side: "RIGHT",
+        body,
+      });
+    }
+  }
+  return comments.slice(0, 50);
+};
+
 const detectCopilot = (text?: string) => {
   if (!text) return false;
   return /copilot/i.test(text) || /Co-authored-by:\s*GitHub Copilot/i.test(text);
@@ -196,6 +268,7 @@ export = (app: Probot) => {
     const fileList = await context.octokit.pulls.listFiles({ owner, repo: repoName, pull_number: pr.number, per_page: 100 });
     const files = [] as Array<{ path: string; code: string }>;
     const fileCode: Record<string, string> = {};
+    const diffLines: Record<string, Set<number>> = {};
     for (const file of fileList.data) {
       if (!file.filename || file.status === "removed") {
         continue;
@@ -216,6 +289,7 @@ export = (app: Probot) => {
           continue;
         }
         fileCode[file.filename] = raw;
+        diffLines[file.filename] = buildDiffLineIndex(file.patch || "");
         files.push({ path: file.filename, code: raw });
       } catch (error) {
         continue;
@@ -274,6 +348,19 @@ export = (app: Probot) => {
     const shouldBlock = result.policy === "blocking" && !hasOverride;
     const conclusion = shouldBlock ? "failure" : result.policy === "warning" ? "neutral" : "success";
     const annotations = buildAnnotations(result, fileCode);
+    const existingReviewComments = await context.octokit.pulls.listReviewComments({
+      owner,
+      repo: repoName,
+      pull_number: pr.number,
+      per_page: 100,
+    });
+    const existingKeys = new Set<string>();
+    for (const comment of existingReviewComments.data) {
+      if (!comment.body || !comment.path || !comment.line) continue;
+      if (!comment.body.includes(REVIEW_MARKER)) continue;
+      existingKeys.add(`${comment.path}:${comment.line}:${comment.body}`);
+    }
+    const reviewComments = buildReviewComments(result, fileCode, diffLines, existingKeys);
 
     const summaryLines = [
       `Policy: ${result.policy}${hasOverride ? " (override applied)" : ""}`,
@@ -291,6 +378,17 @@ export = (app: Probot) => {
       issue_number: pr.number,
       body: `## Guardrails Report\n${summaryLines.map((line) => `- ${line}`).join("\n")}`,
     });
+
+    if (reviewComments.length > 0) {
+      await context.octokit.pulls.createReview({
+        owner,
+        repo: repoName,
+        pull_number: pr.number,
+        event: "COMMENT",
+        body: "Guardrails inline findings",
+        comments: reviewComments,
+      });
+    }
 
     await context.octokit.checks.update({
       owner,

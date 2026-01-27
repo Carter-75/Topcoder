@@ -8,6 +8,7 @@ DEFAULT_POLICY = {
     "insecure_deserialization": "warning",
     "unsafe_execution": "warning",
     "copilot_generated_code": "warning",
+    "ai_review_missing_key": "blocking",
     "naming_convention": "advisory",
     "logging_practice": "advisory",
     "error_handling": "warning",

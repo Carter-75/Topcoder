@@ -1,6 +1,6 @@
 
 from fastapi import FastAPI, Request, BackgroundTasks
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
 import sys
 import os
 import re
@@ -23,6 +23,7 @@ import dashboard
 
 app = FastAPI(title="Guardrails Backend API")
 JOB_STORE: Dict[str, Dict[str, Any]] = {}
+APP_SETTINGS: Dict[str, Any] = {"openai_api_key": None}
 
 def _resolve_sector(data: dict, repo_path: str) -> str:
     if data.get("sector"):
@@ -43,9 +44,24 @@ def _sanitize_audit_input(data: dict) -> dict:
     sanitized = dict(data)
     if "code" in sanitized:
         sanitized["code"] = "<redacted>"
+    if "ai_api_key" in sanitized:
+        sanitized["ai_api_key"] = "<redacted>"
     if "files" in sanitized:
         sanitized["files"] = [{"path": f.get("path"), "size": len(f.get("code", ""))} for f in sanitized["files"]]
     return sanitized
+
+def _get_request_ai_key(request: Request, data: dict) -> str | None:
+    header_key = request.headers.get("x-openai-api-key") or request.headers.get("x-openai-key")
+    return header_key or data.get("ai_api_key") or APP_SETTINGS.get("openai_api_key") or os.environ.get("OPENAI_API_KEY")
+
+def _require_settings_token(request: Request) -> str | None:
+    token = os.environ.get("SETTINGS_TOKEN")
+    if not token:
+        return None
+    auth = request.headers.get("authorization", "")
+    if auth.startswith("Bearer ") and auth.split(" ", 1)[1] == token:
+        return None
+    return "Missing or invalid settings token."
 
 def _summarize_output(output: dict) -> dict:
     return {
@@ -80,11 +96,18 @@ def _enforce_data_residency(repo_path: str) -> str | None:
         return f"Repository requires data residency '{desired}', but server is '{enforced}'."
     return None
 
-def _analyze_code(code: str, sector: str, repo_path: str, policy_override: dict | None = None) -> dict:
+def _analyze_code(code: str, sector: str, repo_path: str, policy_override: dict | None = None, ai_key: str | None = None) -> dict:
     issues = security_rules.run_security_rules(code)
     coding_issues = coding_standards.run_coding_standards_rules(code)
     license_ip_issues = license_ip.run_license_ip_checks(code)
-    ai_suggestions = ai_review.ai_review(code)
+    ai_suggestions = ai_review.ai_review(code, api_key_override=ai_key)
+    if any(suggestion.get("type") == "ai_review_missing_key" for suggestion in ai_suggestions):
+        issues.append({
+            "type": "ai_review_missing_key",
+            "message": "OPENAI_API_KEY is required for AI review.",
+            "explanation": "Set OPENAI_API_KEY in the environment to enable AI review for all scans.",
+            "severity": "blocking",
+        })
     rules = rule_engine.load_rulepack(sector)
     sector_issues = rule_engine.apply_rulepack_rules(code, rules)
     policy_mode = policy.evaluate_policy(
@@ -113,6 +136,158 @@ def dashboard_view():
 def health():
     return {"status": "ok"}
 
+@app.get("/")
+def root():
+    html = """
+    <html>
+    <head>
+        <title>Guardrails API</title>
+        <meta name='viewport' content='width=device-width, initial-scale=1'>
+        <style>
+            body { font-family: 'Segoe UI', Arial, sans-serif; background: #f7f9fa; margin: 0; }
+            .container { max-width: 720px; margin: 3rem auto; background: #fff; border-radius: 12px; box-shadow: 0 2px 8px #0001; padding: 2rem; }
+            h1 { color: #1a237e; margin-top: 0; }
+            ul { padding-left: 1.2rem; }
+            a { color: #3949ab; text-decoration: none; }
+        </style>
+    </head>
+    <body>
+        <div class='container'>
+            <h1>Guardrails API</h1>
+            <p>Service is running. Use the links below:</p>
+            <ul>
+                <li><a href='/settings/ui'>Settings UI</a></li>
+                <li><a href='/docs'>API Docs</a></li>
+                <li><a href='/health'>Health Check</a></li>
+                <li><a href='/dashboard'>Audit Dashboard</a></li>
+            </ul>
+        </div>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html)
+
+@app.get("/settings")
+def get_settings():
+    require_ai = os.environ.get("REQUIRE_AI_REVIEW", "true").lower() == "true"
+    return {
+        "openai_api_key_set": bool(APP_SETTINGS.get("openai_api_key") or os.environ.get("OPENAI_API_KEY")),
+        "require_ai_review": require_ai,
+    }
+
+@app.get("/settings/ui")
+def settings_ui():
+    html = """
+    <html>
+    <head>
+        <title>Guardrails Settings</title>
+        <meta name='viewport' content='width=device-width, initial-scale=1'>
+        <style>
+            body { font-family: 'Segoe UI', Arial, sans-serif; background: #f7f9fa; margin: 0; }
+            .container { max-width: 720px; margin: 3rem auto; background: #fff; border-radius: 12px; box-shadow: 0 2px 8px #0001; padding: 2rem; }
+            h1 { color: #1a237e; margin-top: 0; }
+            label { display: block; font-weight: 600; margin-top: 1rem; }
+            input { width: 100%; padding: 0.65rem; border: 1px solid #d0d7de; border-radius: 8px; font-size: 1rem; }
+            button { margin-top: 1.2rem; background: #3949ab; color: #fff; border: 0; padding: 0.8rem 1.2rem; border-radius: 8px; font-size: 1rem; cursor: pointer; }
+            button:disabled { background: #9fa8da; cursor: not-allowed; }
+            .status { margin-top: 1rem; font-size: 0.95rem; }
+            .success { color: #2e7d32; }
+            .error { color: #c62828; }
+            .muted { color: #6b7280; }
+            .card { margin-top: 1.5rem; padding: 1rem; background: #f5f7ff; border-radius: 8px; }
+        </style>
+    </head>
+    <body>
+        <div class='container'>
+            <h1>Guardrails Settings</h1>
+            <p class='muted'>Store your OpenAI API key for all Guardrails scans. If <b>SETTINGS_TOKEN</b> is configured on the server, include it below.</p>
+
+            <div class='card'>
+                <div id='current-status' class='status muted'>Checking current status...</div>
+            </div>
+
+            <label for='apiKey'>OpenAI API Key</label>
+            <input id='apiKey' type='password' placeholder='sk-...' />
+
+            <label for='settingsToken'>Settings Token (optional)</label>
+            <input id='settingsToken' type='password' placeholder='Bearer token if required' />
+
+            <button id='saveBtn'>Save Key</button>
+            <div id='result' class='status'></div>
+        </div>
+
+        <script>
+            const statusEl = document.getElementById('current-status');
+            const resultEl = document.getElementById('result');
+            const saveBtn = document.getElementById('saveBtn');
+
+            async function refreshStatus() {
+                try {
+                    const res = await fetch('/settings');
+                    const data = await res.json();
+                    statusEl.textContent = data.openai_api_key_set
+                        ? 'API key is configured.'
+                        : 'API key is not configured.';
+                } catch (err) {
+                    statusEl.textContent = 'Unable to load status.';
+                }
+            }
+
+            saveBtn.addEventListener('click', async () => {
+                resultEl.textContent = '';
+                resultEl.className = 'status';
+                const apiKey = document.getElementById('apiKey').value.trim();
+                const token = document.getElementById('settingsToken').value.trim();
+                if (!apiKey) {
+                    resultEl.textContent = 'API key is required.';
+                    resultEl.classList.add('error');
+                    return;
+                }
+                saveBtn.disabled = true;
+                try {
+                    const res = await fetch('/settings/api-key', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                        },
+                        body: JSON.stringify({ api_key: apiKey })
+                    });
+                    const data = await res.json();
+                    if (!res.ok) {
+                        throw new Error(data.error || 'Failed to save key.');
+                    }
+                    resultEl.textContent = 'Saved successfully.';
+                    resultEl.classList.add('success');
+                    document.getElementById('apiKey').value = '';
+                    await refreshStatus();
+                } catch (err) {
+                    resultEl.textContent = err.message || 'Failed to save key.';
+                    resultEl.classList.add('error');
+                } finally {
+                    saveBtn.disabled = false;
+                }
+            });
+
+            refreshStatus();
+        </script>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html)
+
+@app.post("/settings/api-key")
+async def set_api_key(request: Request):
+    auth_error = _require_settings_token(request)
+    if auth_error:
+        return JSONResponse({"error": auth_error}, status_code=401)
+    data = await request.json()
+    key = data.get("api_key")
+    if not key:
+        return JSONResponse({"error": "api_key is required."}, status_code=400)
+    APP_SETTINGS["openai_api_key"] = key
+    return JSONResponse({"result": "saved"})
+
 @app.post("/analyze")
 async def analyze(request: Request):
     data = await request.json()
@@ -123,7 +298,8 @@ async def analyze(request: Request):
         return JSONResponse({"error": residency_error}, status_code=400)
     sector = _resolve_sector(data, repo_path)
     policy_override = _resolve_policy_override(data, repo_path)
-    analysis = _analyze_code(code, sector, repo_path, policy_override=policy_override)
+    ai_key = _get_request_ai_key(request, data)
+    analysis = _analyze_code(code, sector, repo_path, policy_override=policy_override, ai_key=ai_key)
     _apply_guidelines(analysis)
     result = {
         "result": "analyzed",
@@ -149,6 +325,7 @@ async def analyze_batch(request: Request):
         return JSONResponse({"error": residency_error}, status_code=400)
     sector = _resolve_sector(data, repo_path)
     policy_override = _resolve_policy_override(data, repo_path)
+    ai_key = _get_request_ai_key(request, data)
 
     findings = {}
     policy_mode = "advisory"
@@ -156,7 +333,7 @@ async def analyze_batch(request: Request):
     for item in files:
         path = item.get("path", "unknown")
         code = item.get("code", "")
-        analysis = _analyze_code(code, sector, repo_path, policy_override=policy_override)
+        analysis = _analyze_code(code, sector, repo_path, policy_override=policy_override, ai_key=ai_key)
         _apply_guidelines(analysis)
         findings[path] = {
             "result": "analyzed",
@@ -240,13 +417,14 @@ def _run_async_scan(job_id: str, payload: dict) -> None:
     repo_path = payload.get("repo_path", ".")
     sector = _resolve_sector(payload, repo_path)
     policy_override = _resolve_policy_override(payload, repo_path)
+    ai_key = payload.get("ai_api_key") or APP_SETTINGS.get("openai_api_key") or os.environ.get("OPENAI_API_KEY")
     findings = {}
     policy_mode = "advisory"
     override_allowed = False
     for item in files:
         path = item.get("path", "unknown")
         code = item.get("code", "")
-        analysis = _analyze_code(code, sector, repo_path, policy_override=policy_override)
+        analysis = _analyze_code(code, sector, repo_path, policy_override=policy_override, ai_key=ai_key)
         _apply_guidelines(analysis)
         findings[path] = {"result": "analyzed", **analysis}
         if analysis["policy"] == "blocking":

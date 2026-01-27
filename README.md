@@ -36,7 +36,8 @@ This project is a secure, modular backend for code analysis, policy enforcement,
   cp .env.example .env
   # Edit .env and set API_KEY=your-key-here
   ```
-- The API key is required for some AI review features.
+- The API key (`OPENAI_API_KEY`) is required for AI review; by default, scans are blocked if it is missing.
+- Optional: set `REQUIRE_AI_REVIEW=false` to allow stubbed AI suggestions in local/dev.
 
 Audit logging:
 - `AUDIT_LOG_ENABLED` (default: true)
@@ -53,7 +54,7 @@ uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 ## GitHub App Integration
-The GitHub app scans PRs and posts a Guardrails report plus a check run.
+The GitHub app scans PRs and posts a Guardrails report plus a check run, with inline PR review comments for findings in the diff.
 It also scans push events and reports results on the latest commit.
 
 Environment variables:
@@ -64,6 +65,34 @@ Environment variables:
 - `USE_ASYNC_SCAN` (optional): enable async scan flow (default: false)
 
 The app reads `.guardrails/config.yml|yaml|json` from the repo when available to apply `sector` and `policy` overrides.
+
+## Hosted usage (no repo cloning)
+If you deploy the backend as a hosted service, users can supply their own OpenAI key without cloning or installing anything:
+
+- Set a server-wide key once (main app settings):
+   - `POST /settings/api-key` with JSON `{ "api_key": "..." }`
+   - Optional protection: set `SETTINGS_TOKEN` and call with `Authorization: Bearer <token>`
+- Or send per-request keys from any client:
+   - Header: `X-OpenAI-API-Key: <key>` (or `X-OpenAI-Key`)
+   - Body: `ai_api_key` also supported for API clients
+
+This enables scanning any connected GitHub repo via the app, or calling the API directly from external tools.
+
+Settings UI:
+- Website (main app): https://topcoder-production.up.railway.app
+- Open `/settings/ui` on the website to store the key in the main app.
+
+## CLI usage (scan any local repo)
+Use the lightweight CLI wrapper to scan any repo from its root:
+- Run the CLI in this repo via `python guardrails.py scan <repo-path>`
+- Provide the hosted API URL and API key via flags or environment
+- Default hosted URL is `https://topcoder-production.up.railway.app`
+- Set `GUARDRAILS_API_URL` to override the default and avoid passing `--api` every time
+
+## GitHub App endpoint
+Use the same deployment for the webhook URL:
+- Webhook URL: https://topcoder-production.up.railway.app
+- Optional `--autofix` applies safe local fixes and stores backups in `.guardrails_backup`
 
 ## Scan an entire repository
 From the `Topcoder/backend` directory, run:

@@ -1,9 +1,11 @@
 import argparse
 import json
 import os
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Tuple
 
 import requests
+
+import autofix
 
 DEFAULT_EXCLUDE_DIRS = {
     ".git",
@@ -56,31 +58,57 @@ def iter_files(root: str, extensions: set[str], exclude_dirs: set[str]) -> List[
     return matches
 
 
-def analyze_file(api_url: str, path: str, sector: str, repo_path: str) -> Dict[str, Any]:
-    with open(path, "r", encoding="utf-8", errors="ignore") as f:
-        code = f.read()
+def analyze_batch(api_url: str, files: List[Tuple[str, str]], sector: str, repo_path: str, api_key: str | None) -> Dict[str, Any]:
     payload = {
-        "code": code,
+        "files": [{"path": path, "code": code} for path, code in files],
         "sector": sector,
         "repo_path": repo_path,
     }
-    resp = requests.post(f"{api_url.rstrip('/')}/analyze", json=payload, timeout=30)
+    headers = {}
+    if api_key:
+        headers["X-OpenAI-API-Key"] = api_key
+    resp = requests.post(f"{api_url.rstrip('/')}/analyze-batch", json=payload, headers=headers, timeout=60)
     resp.raise_for_status()
     return resp.json()
 
 
-def main() -> int:
+def _write_backup(backup_root: str, repo_root: str, rel_path: str, code: str) -> None:
+    backup_path = os.path.join(backup_root, rel_path)
+    os.makedirs(os.path.dirname(backup_path), exist_ok=True)
+    with open(backup_path, "w", encoding="utf-8") as f:
+        f.write(code)
+
+
+def main(argv: List[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Scan a repository using the Guardrails API.")
     parser.add_argument("repo", help="Path to the repository root")
-    parser.add_argument("--api", default="http://127.0.0.1:8000", help="Guardrails API base URL")
+    parser.add_argument("--api", default=os.environ.get("GUARDRAILS_API_URL", "https://topcoder-production.up.railway.app"), help="Guardrails API base URL")
     parser.add_argument("--sector", default="finance", help="Sector rulepack to apply")
     parser.add_argument("--output", default="scan_results.json", help="Output JSON file")
     parser.add_argument("--max-files", type=int, default=0, help="Limit the number of files scanned (0 = no limit)")
     parser.add_argument("--extensions", default=",".join(sorted(DEFAULT_EXTENSIONS)), help="Comma-separated file extensions")
     parser.add_argument("--exclude-dirs", default=",".join(sorted(DEFAULT_EXCLUDE_DIRS)), help="Comma-separated directory names to skip")
-    args = parser.parse_args()
+    parser.add_argument("--api-key", default=os.environ.get("OPENAI_API_KEY", ""), help="OpenAI API key (or set OPENAI_API_KEY)")
+    parser.add_argument("--chunk-size", type=int, default=25, help="Number of files per batch request")
+    parser.add_argument("--autofix", action="store_true", help="Apply safe autofixes to local files")
+    parser.add_argument("--no-autofix", action="store_true", help="Disable autofix explicitly")
+    parser.add_argument("--no-backup", action="store_true", help="Disable autofix backups")
+    args = parser.parse_args(argv)
 
     repo_path = os.path.abspath(args.repo)
+    if args.autofix:
+        autofix_enabled = True
+    elif args.no_autofix:
+        autofix_enabled = False
+    else:
+        if os.isatty(0):
+            try:
+                answer = input("Apply safe autofixes? [y/N]: ").strip().lower()
+                autofix_enabled = answer in {"y", "yes"}
+            except Exception:
+                autofix_enabled = False
+        else:
+            autofix_enabled = False
     extensions = {ext.strip().lower() for ext in args.extensions.split(",") if ext.strip()}
     exclude_dirs = {d.strip() for d in args.exclude_dirs.split(",") if d.strip()}
 
@@ -97,14 +125,54 @@ def main() -> int:
         "errors": {},
     }
 
+    autofix_changes: Dict[str, List[str]] = {}
+    backup_root = os.path.join(repo_path, ".guardrails_backup")
+
+    batch: List[Tuple[str, str]] = []
+    batch_paths: List[str] = []
     for path in files:
         rel_path = os.path.relpath(path, repo_path)
         try:
-            findings = analyze_file(args.api, path, args.sector, repo_path)
-            results["findings"][rel_path] = findings
-            results["files_scanned"] += 1
+            with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                code = f.read()
+            if autofix_enabled:
+                updated, changes = autofix.apply_autofix(path, code)
+                if changes and not args.no_backup:
+                    _write_backup(backup_root, repo_path, rel_path, code)
+                if updated != code:
+                    with open(path, "w", encoding="utf-8") as f:
+                        f.write(updated)
+                if changes:
+                    autofix_changes[rel_path] = changes
+                code = updated
+            batch.append((rel_path, code))
+            batch_paths.append(rel_path)
+            if len(batch) >= args.chunk_size:
+                findings = analyze_batch(args.api, batch, args.sector, repo_path, args.api_key or None)
+                for file_path, file_findings in findings.get("findings", {}).items():
+                    results["findings"][file_path] = file_findings
+                    results["files_scanned"] += 1
+                batch = []
+                batch_paths = []
         except Exception as exc:
             results["errors"][rel_path] = str(exc)
+
+    if batch:
+        try:
+            findings = analyze_batch(args.api, batch, args.sector, repo_path, args.api_key or None)
+            for file_path, file_findings in findings.get("findings", {}).items():
+                results["findings"][file_path] = file_findings
+                results["files_scanned"] += 1
+        except Exception as exc:
+            for file_path in batch_paths:
+                results["errors"][file_path] = str(exc)
+
+    if autofix_changes:
+        results["autofix"] = {
+            "applied": True,
+            "backup_dir": None if args.no_backup else ".guardrails_backup",
+            "changes": autofix_changes,
+        }
 
     with open(args.output, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2)
