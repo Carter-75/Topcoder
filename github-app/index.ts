@@ -151,7 +151,8 @@ const summarizeFindings = (result: AnalyzeBatchResponse) => {
   let license = 0;
   let sector = 0;
   let ai = 0;
-  for (const file of Object.values(result.findings)) {
+  const findings = result.findings || {};
+  for (const file of Object.values(findings)) {
     issues += file.issues?.length || 0;
     coding += file.coding_issues?.length || 0;
     license += file.license_ip_issues?.length || 0;
@@ -382,7 +383,11 @@ export = (app: Probot) => {
 
     const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
     const backendToken = process.env.BACKEND_TOKEN || "";
+    const userKey = process.env.GUARDRAILS_USER || process.env.GITHUB_ACTOR || "";
     const authHeaders: Record<string, string> = backendToken ? { Authorization: `Bearer ${backendToken}` } : {};
+    if (userKey) {
+      authHeaders["X-Guardrails-User"] = userKey;
+    }
     const useAsync = process.env.USE_ASYNC_SCAN === "true";
     const repoLicenseTexts = await fetchLicenseTexts(context, owner, repoName, ref);
     const requestPayload = {
@@ -403,11 +408,21 @@ export = (app: Probot) => {
         headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify(requestPayload),
       });
+      if (!startRes.ok) {
+        const body = await startRes.text();
+        throw new Error(`Guardrails async scan failed (${startRes.status}): ${body}`);
+      }
       const startData = await startRes.json();
       const jobId = startData.job_id;
       let attempts = 0;
       while (attempts < 10) {
-        const statusRes = await fetch(`${backendUrl}/scan/status/${jobId}`);
+        const statusRes = await fetch(`${backendUrl}/scan/status/${jobId}`, {
+          headers: authHeaders,
+        });
+        if (!statusRes.ok) {
+          const body = await statusRes.text();
+          throw new Error(`Guardrails async status failed (${statusRes.status}): ${body}`);
+        }
         const statusData = await statusRes.json();
         if (statusData.status === "completed") {
           result = statusData.result as AnalyzeBatchResponse;
@@ -425,6 +440,10 @@ export = (app: Probot) => {
         headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify(requestPayload),
       });
+      if (!res.ok) {
+        const body = await res.text();
+        throw new Error(`Guardrails analyze-batch failed (${res.status}): ${body}`);
+      }
       result = (await res.json()) as AnalyzeBatchResponse;
     }
     const { issues, coding, license, sector: sectorIssues, ai, repoLicense } = summarizeFindings(result);
@@ -539,7 +558,11 @@ export = (app: Probot) => {
     const aiGenerated = payload.commits?.some((commit: any) => detectCopilot(commit.message)) || false;
     const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
     const backendToken = process.env.BACKEND_TOKEN || "";
+    const userKey = process.env.GUARDRAILS_USER || process.env.GITHUB_ACTOR || "";
     const authHeaders: Record<string, string> = backendToken ? { Authorization: `Bearer ${backendToken}` } : {};
+    if (userKey) {
+      authHeaders["X-Guardrails-User"] = userKey;
+    }
     const useAsync = process.env.USE_ASYNC_SCAN === "true";
     const repoLicenseTexts = await fetchLicenseTexts(context, owner, repoName, headSha);
     const requestPayload = {
@@ -559,11 +582,21 @@ export = (app: Probot) => {
         headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify(requestPayload),
       });
+      if (!startRes.ok) {
+        const body = await startRes.text();
+        throw new Error(`Guardrails async scan failed (${startRes.status}): ${body}`);
+      }
       const startData = await startRes.json();
       const jobId = startData.job_id;
       let attempts = 0;
       while (attempts < 10) {
-        const statusRes = await fetch(`${backendUrl}/scan/status/${jobId}`);
+        const statusRes = await fetch(`${backendUrl}/scan/status/${jobId}`, {
+          headers: authHeaders,
+        });
+        if (!statusRes.ok) {
+          const body = await statusRes.text();
+          throw new Error(`Guardrails async status failed (${statusRes.status}): ${body}`);
+        }
         const statusData = await statusRes.json();
         if (statusData.status === "completed") {
           result = statusData.result as AnalyzeBatchResponse;
@@ -581,6 +614,10 @@ export = (app: Probot) => {
         headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify(requestPayload),
       });
+      if (!res.ok) {
+        const body = await res.text();
+        throw new Error(`Guardrails analyze-batch failed (${res.status}): ${body}`);
+      }
       result = (await res.json()) as AnalyzeBatchResponse;
     }
     const { issues, coding, license, sector: sectorIssues, ai, repoLicense } = summarizeFindings(result);
