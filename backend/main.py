@@ -714,7 +714,7 @@ def settings_ui():
         <div class='container'>
             <div class='panel'>
                 <h1>Guardrails Settings</h1>
-                <p class='muted'>Per-user settings for API key, AI mode, and auto-fix. When <b>SETTINGS_SCOPE=user</b> is enabled, a user token is created automatically and stored for you.</p>
+                <p class='muted'>Configure your AI review and fix preferences.</p>
 
                 <div class='grid'>
                     <div class='card'>
