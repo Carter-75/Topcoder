@@ -1,7 +1,7 @@
 
 from fastapi import FastAPI, Request, BackgroundTasks, Response as FastAPIResponse
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, HTMLResponse, Response
+from fastapi.responses import JSONResponse, HTMLResponse, Response, FileResponse
 import sys
 import os
 import re
@@ -472,6 +472,9 @@ def root():
 
 @app.get("/favicon.ico")
 def favicon():
+    icon_path = os.path.join(os.path.dirname(__file__), "static", "favicon.svg")
+    if os.path.exists(icon_path):
+        return FileResponse(icon_path, media_type="image/svg+xml")
     return Response(status_code=204)
 
 @app.get("/docs", include_in_schema=False)
