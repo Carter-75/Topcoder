@@ -41,3 +41,4 @@ jobs:
         env:
           CONFIG: ${{ env.CONFIG }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BACKEND_URL: https://topcoder-production.up.railway.app
