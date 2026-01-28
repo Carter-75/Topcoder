@@ -152,6 +152,7 @@ async def security_headers_middleware(request: Request, call_next):
     csp = " ".join([
         "default-src 'self';",
         "img-src 'self' data:;",
+        "font-src 'self' data: https://r2cdn.perplexity.ai;",
         "style-src 'self' 'unsafe-inline' https://unpkg.com;",
         "script-src 'self' 'unsafe-inline' https://unpkg.com;",
         "connect-src 'self';",
