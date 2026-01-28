@@ -382,7 +382,7 @@ export = (app: Probot) => {
 
     const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
     const backendToken = process.env.BACKEND_TOKEN || "";
-    const authHeaders = backendToken ? { Authorization: `Bearer ${backendToken}` } : {};
+    const authHeaders: Record<string, string> = backendToken ? { Authorization: `Bearer ${backendToken}` } : {};
     const useAsync = process.env.USE_ASYNC_SCAN === "true";
     const repoLicenseTexts = await fetchLicenseTexts(context, owner, repoName, ref);
     const requestPayload = {
@@ -539,7 +539,7 @@ export = (app: Probot) => {
     const aiGenerated = payload.commits?.some((commit: any) => detectCopilot(commit.message)) || false;
     const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
     const backendToken = process.env.BACKEND_TOKEN || "";
-    const authHeaders = backendToken ? { Authorization: `Bearer ${backendToken}` } : {};
+    const authHeaders: Record<string, string> = backendToken ? { Authorization: `Bearer ${backendToken}` } : {};
     const useAsync = process.env.USE_ASYNC_SCAN === "true";
     const repoLicenseTexts = await fetchLicenseTexts(context, owner, repoName, headSha);
     const requestPayload = {
