@@ -16,7 +16,7 @@ RUN chmod +x /app/entrypoint.sh
 ENV PORT=8000 \
 	AUDIT_LOG_ENABLED=true \
 	AUDIT_LOG_STORE_OUTPUT=false \
-	AUDIT_LOG_PATH=audit_log.jsonl \
+	AUDIT_LOG_PATH=/tmp/audit_log.jsonl \
 	DATA_RESIDENCY=us-west1 \
 	SETTINGS_SCOPE=user \
 	SETTINGS_STORE_PATH=settings.enc \

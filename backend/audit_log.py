@@ -6,7 +6,7 @@ import hashlib
 from datetime import datetime
 from typing import Dict, Any
 
-AUDIT_LOG_PATH = os.environ.get("AUDIT_LOG_PATH", "audit_log.jsonl")
+AUDIT_LOG_PATH = os.environ.get("AUDIT_LOG_PATH", "/tmp/audit_log.jsonl")
 AUDIT_LOG_ENABLED = os.environ.get("AUDIT_LOG_ENABLED", "true").lower() == "true"
 AUDIT_LOG_STORE_OUTPUT = os.environ.get("AUDIT_LOG_STORE_OUTPUT", "true").lower() == "true"
 AUDIT_LOG_MAX_BYTES = int(os.environ.get("AUDIT_LOG_MAX_BYTES", "5000000"))
