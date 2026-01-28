@@ -5,6 +5,14 @@ Enterprise-grade guardrails for GitHub Copilot workflows: a FastAPI backend, Git
 ## Deployed URL
 https://topcoder-production.up.railway.app
 
+## Quick start (hosted)
+1. Open the deployed URL.
+2. Go to /settings/ui.
+3. Paste your OpenAI API key and save.
+4. Create or update a PR in a repo where the GitHub App is installed. Guardrails posts comments/checks automatically.
+
+That is all most users need.
+
 ## What this delivers
 - Hybrid analysis engine: rule-based static checks + AI review with explanations.
 - Copilot awareness: stricter handling for AI-generated code paths.
@@ -18,13 +26,13 @@ https://topcoder-production.up.railway.app
 - Secure coding guardrails with OWASP/CWE mappings.
 - Copilot-aware flagging and stricter enforcement for AI-generated code.
 - Configurable coding standards via YAML/JSON repo config.
-- AI-assisted review with explanations and suggested fixes.
+- AI-assisted PR review with explanations and suggested fixes (security, performance, maintainability).
 - License/IP checks (restricted licenses + duplication heuristics).
-- Policy-based enforcement modes with override label.
-- PR/commit scanning via GitHub App (check runs + inline comments).
+- Policy-based enforcement modes (advisory, warning, blocking) with override support.
+- PR and commit scanning via GitHub App (check runs + inline comments + summaries).
 - Traceability with audit IDs, export, and resolution events.
 - Async scan flow for large PRs.
-- Pluggable rulepacks per industry (finance, healthcare, public sector, telecom, government).
+- Pluggable rulepacks per industry (finance, healthcare, public sector, telecom, government) and custom uploads.
 
 ## Architecture
 - backend/ — FastAPI service, rule engine, AI review, audit logging
@@ -38,21 +46,8 @@ https://topcoder-production.up.railway.app
 - Data residency can be enforced via repo config + environment variable.
 
 ## Requirements
+### CLI
 - Python 3.9+
-- See backend/requirements.txt for dependencies
-
-## Local setup (backend)
-```sh
-cd Topcoder/backend
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-```
-
-## Run the server
-```sh
-uvicorn main:app --reload --host 127.0.0.1 --port 8000
-```
 
 ## Configuration (backend)
 Core settings:
@@ -61,30 +56,7 @@ Core settings:
 - GUARDRAILS_ADMIN_TOKEN (optional) — bearer token required for admin endpoints (audit export, rulepack upload)
 - SETTINGS_SCOPE (default: global) — global | user | ip
 - SETTINGS_TOKEN (optional) — protects settings endpoints
-- SETTINGS_ENC_KEY (recommended) — encrypts persisted settings
-- SETTINGS_KEY_PATH (optional) — path to a persistent encryption key file (auto-created when missing)
-- SETTINGS_STORE_PATH (default: settings.enc) — encrypted settings file
 - REQUIRE_AI_REVIEW_DEFAULT (default: false)
-- SECURE_COOKIES (default: false) — set true behind HTTPS to secure cookies
-
-Security & access:
-- CORS_ALLOW_ORIGINS (optional) — comma-separated allowlist for CORS
-- RATE_LIMIT_ENABLED (default: true)
-- RATE_LIMIT_RPS (default: 10)
-- RATE_LIMIT_BURST (default: 20)
-- RATE_LIMIT_WINDOW (default: 10 seconds)
-
-Audit logging:
-- AUDIT_LOG_ENABLED (default: true)
-- AUDIT_LOG_PATH (default: audit_log.jsonl)
-- AUDIT_LOG_STORE_OUTPUT (default: true)
-  - Stored output is sanitized to avoid retaining code snippets or patches
-- AUDIT_LOG_MAX_BYTES (default: 5000000)
-- AUDIT_LOG_MAX_FILES (default: 5)
-- AUDIT_LOG_HMAC_KEY (optional) — enables tamper-evident hash chaining
-
-Data residency:
-- DATA_RESIDENCY (optional)
 
 ## GitHub App integration
 The GitHub App scans PRs and pushes, posts comments/checks, and reads repo overrides from .guardrails/config.yml|yaml|json.
@@ -110,6 +82,8 @@ guardrails scan <repo-path> --user <token>
 guardrails scan --user <token>
 ```
 
+Before scanning, save your OpenAI API key in the hosted settings UI (/settings/ui). The CLI uses the hosted backend by default.
+
 If the backend enforces API tokens:
 ```sh
 guardrails scan <repo-path> --user <token> --api-token <backend-token>
@@ -126,14 +100,13 @@ Notes:
 - Use --autofix to apply safe local fixes
 - Use --no-ai to disable AI review for a run
 
-## CLI settings (no UI required)
+## What users must do
+- Provide their own OpenAI API key via /settings/ui (hosted).
+- Install the CLI only if they want local scans.
+
+## CLI settings (optional)
 ```sh
-python guardrails.py settings --generate-local-key
-python guardrails.py settings --set-api-key <key>
-python guardrails.py settings --ai-mode require|allow
-python guardrails.py settings --fix-mode full|safe|none
 guardrails settings --issue-user-token
-python guardrails.py settings --verify
 ```
 
 ## API endpoints
@@ -160,15 +133,6 @@ python guardrails.py settings --verify
 - GET /audit/export
 - POST /audit/resolve
 - GET /docs
-
-## Deployment notes
-Railway containers use an ephemeral filesystem on redeploys. If you rely on the settings UI/CLI to store the API key, it will be lost unless you persist the settings file.
-
-Fix: attach a volume at /data, then set:
-- SETTINGS_KEY_PATH=/data/settings.key
-- SETTINGS_STORE_PATH=/data/settings.enc
-
-If you do not want to persist a file, set OPENAI_API_KEY as an environment variable in Railway so the key is always present after redeploys.
 
 ## Testing
 ```sh
