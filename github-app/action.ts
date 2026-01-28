@@ -30,9 +30,9 @@ const main = async () => {
 
   await probot.receive({
     id: getEnv("GITHUB_RUN_ID") || "guardrails-action",
-    name: eventName,
+    name: eventName as any,
     payload,
-  });
+  } as any);
 };
 
 main().catch((error) => {
