@@ -1,4 +1,4 @@
-# Topcoder Guardrails t
+# Topcoder Guardrails
 
 Enterprise-grade guardrails for GitHub Copilot workflows: a FastAPI backend, GitHub App integration, and CLI that enforce security, policy, and licensing standards with explainable AI + static analysis.
 
