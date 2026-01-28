@@ -150,8 +150,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--ai-max-chars", type=int, default=0, help="AI review max chars override (or set AI_REVIEW_MAX_CHARS)")
     parser.add_argument("--user", default=os.environ.get("GUARDRAILS_USER", ""), help="User token for scoped settings")
     parser.add_argument("--chunk-size", type=int, default=25, help="Number of files per batch request")
-    parser.add_argument("--autofix", action="store_true", help="Apply safe autofixes to local files")
-    parser.add_argument("--no-autofix", action="store_true", help="Disable autofix explicitly")
+    parser.add_argument("--safe-fix", action="store_true", help="Apply safe autofixes to local files")
+    parser.add_argument("--no-fix", action="store_true", help="Disable all fix modes")
     parser.add_argument("--no-backup", action="store_true", help="Disable autofix backups")
     parser.add_argument("--no-ai", action="store_true", help="Disable AI review for this run")
     parser.add_argument("--full-fix", action="store_true", help="Use AI rewrite to fix all findings after safe autofix")
@@ -192,10 +192,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         except Exception:
             require_ai_review = False
 
-    if args.autofix:
-        autofix_enabled = True
-    elif args.no_autofix:
+    if args.no_fix:
         autofix_enabled = False
+        full_fix_enabled = False
+    elif args.safe_fix:
+        autofix_enabled = True
     else:
         autofix_enabled = None
         try:
@@ -225,7 +226,17 @@ def main(argv: Optional[List[str]] = None) -> int:
                         data = settings_res.json() if settings_res.ok else data
                     else:
                         raise RuntimeError("Missing user token for user-scoped settings.")
-                if isinstance(data.get("autofix_default"), bool):
+                fix_mode_default = data.get("fix_mode_default")
+                if isinstance(fix_mode_default, str) and fix_mode_default in {"full", "safe", "none"}:
+                    if fix_mode_default == "full":
+                        full_fix_enabled = True
+                        autofix_enabled = True
+                    elif fix_mode_default == "safe":
+                        autofix_enabled = True
+                    else:
+                        autofix_enabled = False
+                        full_fix_enabled = False
+                elif isinstance(data.get("autofix_default"), bool):
                     autofix_enabled = data["autofix_default"]
                 if not ai_model and isinstance(data.get("ai_model"), str):
                     ai_model = data["ai_model"]
@@ -235,11 +246,17 @@ def main(argv: Optional[List[str]] = None) -> int:
             autofix_enabled = None
         if full_fix_enabled:
             autofix_enabled = True
-        if autofix_enabled is None:
+        if autofix_enabled is None and not full_fix_enabled:
             if os.isatty(0):
                 try:
-                    answer = input("Apply safe autofixes? [y/N]: ").strip().lower()
-                    autofix_enabled = answer in {"y", "yes"}
+                    answer = input("Fix mode? [f]ull / [s]afe / [n]one: ").strip().lower()
+                    if answer.startswith("f"):
+                        full_fix_enabled = True
+                        autofix_enabled = True
+                    elif answer.startswith("s"):
+                        autofix_enabled = True
+                    else:
+                        autofix_enabled = False
                 except Exception:
                     autofix_enabled = False
             else:

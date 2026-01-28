@@ -22,8 +22,8 @@ def main() -> int:
     scan.add_argument("--exclude-dirs", default=",".join(sorted(scan_repo.DEFAULT_EXCLUDE_DIRS)), help="Comma-separated directory names to skip")
     scan.add_argument("--api-key", default=os.environ.get("OPENAI_API_KEY", ""), help="OpenAI API key (or set OPENAI_API_KEY)")
     scan.add_argument("--chunk-size", type=int, default=25, help="Number of files per batch request")
-    scan.add_argument("--autofix", action="store_true", help="Apply safe autofixes to local files")
-    scan.add_argument("--no-autofix", action="store_true", help="Disable autofix explicitly")
+    scan.add_argument("--safe-fix", action="store_true", help="Apply safe autofixes to local files")
+    scan.add_argument("--no-fix", action="store_true", help="Disable all fix modes")
     scan.add_argument("--no-backup", action="store_true", help="Disable autofix backups")
     scan.add_argument("--no-ai", action="store_true", help="Disable AI review for this run")
     scan.add_argument("--user", default=os.environ.get("GUARDRAILS_USER", ""), help="User token for scoped settings")
@@ -35,7 +35,8 @@ def main() -> int:
     settings.add_argument("--user", default=os.environ.get("GUARDRAILS_USER", ""), help="Optional user identifier for scoped settings")
     settings.add_argument("--set-api-key", default="", help="Set API key in hosted settings")
     settings.add_argument("--ai-mode", choices=["require", "allow"], help="Set default AI mode (require or allow non-AI)")
-    settings.add_argument("--autofix-mode", choices=["on", "off"], help="Set default auto-fix mode")
+    settings.add_argument("--fix-mode", choices=["full", "safe", "none"], help="Set default fix mode")
+    settings.add_argument("--autofix-mode", choices=["on", "off"], help="(Deprecated) Set default auto-fix mode")
     settings.add_argument("--issue-user-token", action="store_true", help="Generate a user token and print it")
     settings.add_argument("--generate-local-key", action="store_true", help="Generate a local settings encryption key")
     settings.add_argument("--verify", action="store_true", help="Verify settings sync with the server")
@@ -63,10 +64,10 @@ def main() -> int:
             "--user",
             args.user,
         ]
-        if args.autofix:
-            argv.append("--autofix")
-        if args.no_autofix:
-            argv.append("--no-autofix")
+        if args.safe_fix:
+            argv.append("--safe-fix")
+        if args.no_fix:
+            argv.append("--no-fix")
         if args.no_backup:
             argv.append("--no-backup")
         if args.no_ai:
@@ -126,6 +127,16 @@ def main() -> int:
                 f"{api_base}/settings/autofix-mode",
                 headers={"Content-Type": "application/json", **headers},
                 json={"autofix_default": value},
+                timeout=15,
+            )
+            res.raise_for_status()
+            print(res.json())
+            return 0
+        if args.fix_mode:
+            res = requests.post(
+                f"{api_base}/settings/fix-mode",
+                headers={"Content-Type": "application/json", **headers},
+                json={"fix_mode_default": args.fix_mode},
                 timeout=15,
             )
             res.raise_for_status()

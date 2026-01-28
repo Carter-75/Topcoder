@@ -150,6 +150,11 @@ guardrails scan <repo-path> --user <token>
 guardrails scan --user <token>
 ```
 
+Fix modes:
+- Full fix (AI rewrite + safe fixes): `guardrails scan --full-fix --user <token>`
+- Safe fix only: `guardrails scan --safe-fix --user <token>`
+- No fixes: `guardrails scan --no-fix --user <token>`
+
 Notes:
 - Hosted URL: https://topcoder-production.up.railway.app
 - Override with GUARDRAILS_API_URL or --api
@@ -161,7 +166,7 @@ Notes:
 python guardrails.py settings --generate-local-key
 python guardrails.py settings --set-api-key <key>
 python guardrails.py settings --ai-mode require|allow
-python guardrails.py settings --autofix-mode on|off
+python guardrails.py settings --fix-mode full|safe|none
 guardrails settings --issue-user-token
 python guardrails.py settings --verify
 ```

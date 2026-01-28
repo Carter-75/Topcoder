@@ -28,6 +28,7 @@ APP_SETTINGS: Dict[str, Any] = {
     "openai_api_key": settings_store.load_api_key(),
     "require_ai_review_default": settings_store.load_require_ai_review_default(),
     "autofix_default": settings_store.load_autofix_default(),
+    "fix_mode_default": settings_store.load_fix_mode_default(),
     "ai_model": settings_store.load_ai_model(),
     "ai_review_max_chars": settings_store.load_ai_review_max_chars(),
 }
@@ -451,6 +452,7 @@ def get_settings(request: Request, response: FastAPIResponse):
     stored_key = settings_store.load_api_key(user_key)
     stored_ai = settings_store.load_require_ai_review_default(user_key)
     stored_autofix = settings_store.load_autofix_default(user_key)
+    stored_fix_mode = settings_store.load_fix_mode_default(user_key)
     stored_model = settings_store.load_ai_model(user_key)
     stored_max_chars = settings_store.load_ai_review_max_chars(user_key)
     stored_override_allowed = settings_store.load_override_allowed_default(user_key)
@@ -459,6 +461,7 @@ def get_settings(request: Request, response: FastAPIResponse):
         "require_ai_review": require_ai,
         "require_ai_review_default": stored_ai,
         "autofix_default": stored_autofix,
+        "fix_mode_default": stored_fix_mode,
         "override_allowed_default": stored_override_allowed,
         "ai_model": stored_model or (APP_SETTINGS.get("ai_model") if _is_global_scope() else None) or os.environ.get("OPENAI_MODEL") or "gpt-4o-mini",
         "ai_review_max_chars": stored_max_chars or (APP_SETTINGS.get("ai_review_max_chars") if _is_global_scope() else None) or int(os.environ.get("AI_REVIEW_MAX_CHARS", "12000")),
@@ -571,12 +574,14 @@ def settings_ui():
                         </div>
                     </div>
                     <div class='card'>
-                        <div class='section-title'>Auto-fix default</div>
-                        <div id='autofix-status' class='status muted'>Loading auto-fix...</div>
+                        <div class='section-title'>Fix mode</div>
+                        <div id='fixmode-status' class='status muted'>Loading fix mode...</div>
                         <div class='actions'>
-                            <button id='autofixOnBtn' type='button' class='btn alt' aria-pressed='false'>Enable auto-fix</button>
-                            <button id='autofixOffBtn' type='button' class='btn ghost' aria-pressed='false'>Disable auto-fix</button>
+                            <button id='fixFullBtn' type='button' class='btn alt' aria-pressed='false'>Full fix</button>
+                            <button id='fixSafeBtn' type='button' class='btn' aria-pressed='false'>Safe fix</button>
+                            <button id='fixNoneBtn' type='button' class='btn ghost' aria-pressed='false'>No fix</button>
                         </div>
+                        <div class='status muted'>Full fix uses AI rewrite. Safe fix applies safe local fixes only.</div>
                     </div>
                     <div class='card'>
                         <div class='section-title'>Override blocking policy</div>
@@ -623,15 +628,16 @@ def settings_ui():
             const statusEl = document.getElementById('current-status');
             const encStatusEl = document.getElementById('enc-status');
             const aiModeEl = document.getElementById('ai-mode-status');
-            const autofixEl = document.getElementById('autofix-status');
+            const fixModeEl = document.getElementById('fixmode-status');
             const overrideEl = document.getElementById('override-status');
             const tokenValueEl = document.getElementById('token-value');
             const resultEl = document.getElementById('result');
             const saveBtn = document.getElementById('saveBtn');
             const aiOnBtn = document.getElementById('aiOnBtn');
             const aiOffBtn = document.getElementById('aiOffBtn');
-            const autofixOnBtn = document.getElementById('autofixOnBtn');
-            const autofixOffBtn = document.getElementById('autofixOffBtn');
+            const fixFullBtn = document.getElementById('fixFullBtn');
+            const fixSafeBtn = document.getElementById('fixSafeBtn');
+            const fixNoneBtn = document.getElementById('fixNoneBtn');
             const overrideOnBtn = document.getElementById('overrideOnBtn');
             const overrideOffBtn = document.getElementById('overrideOffBtn');
             const copyTokenBtn = document.getElementById('copyTokenBtn');
@@ -764,20 +770,22 @@ def settings_ui():
                         aiOnBtn.setAttribute('aria-pressed', 'false');
                         aiOffBtn.setAttribute('aria-pressed', 'false');
                     }
-                    if (typeof data.autofix_default === 'boolean') {
-                        autofixEl.textContent = data.autofix_default
-                            ? 'Auto-fix is enabled by default.'
-                            : 'Auto-fix is disabled by default.';
-                        autofixOnBtn.classList.toggle('selected', !!data.autofix_default);
-                        autofixOffBtn.classList.toggle('selected', !data.autofix_default);
-                        autofixOnBtn.setAttribute('aria-pressed', data.autofix_default ? 'true' : 'false');
-                        autofixOffBtn.setAttribute('aria-pressed', data.autofix_default ? 'false' : 'true');
+                    if (typeof data.fix_mode_default === 'string') {
+                        fixModeEl.textContent = `Fix mode default: ${data.fix_mode_default}`;
+                        fixFullBtn.classList.toggle('selected', data.fix_mode_default === 'full');
+                        fixSafeBtn.classList.toggle('selected', data.fix_mode_default === 'safe');
+                        fixNoneBtn.classList.toggle('selected', data.fix_mode_default === 'none');
+                        fixFullBtn.setAttribute('aria-pressed', data.fix_mode_default === 'full' ? 'true' : 'false');
+                        fixSafeBtn.setAttribute('aria-pressed', data.fix_mode_default === 'safe' ? 'true' : 'false');
+                        fixNoneBtn.setAttribute('aria-pressed', data.fix_mode_default === 'none' ? 'true' : 'false');
                     } else {
-                        autofixEl.textContent = 'Auto-fix default is not set.';
-                        autofixOnBtn.classList.remove('selected');
-                        autofixOffBtn.classList.remove('selected');
-                        autofixOnBtn.setAttribute('aria-pressed', 'false');
-                        autofixOffBtn.setAttribute('aria-pressed', 'false');
+                        fixModeEl.textContent = 'Fix mode default is not set.';
+                        fixFullBtn.classList.remove('selected');
+                        fixSafeBtn.classList.remove('selected');
+                        fixNoneBtn.classList.remove('selected');
+                        fixFullBtn.setAttribute('aria-pressed', 'false');
+                        fixSafeBtn.setAttribute('aria-pressed', 'false');
+                        fixNoneBtn.setAttribute('aria-pressed', 'false');
                     }
                     if (typeof data.override_allowed_default === 'boolean') {
                         overrideEl.textContent = data.override_allowed_default
@@ -885,37 +893,46 @@ def settings_ui():
             aiOnBtn.addEventListener('click', () => setAiMode(true));
             aiOffBtn.addEventListener('click', () => setAiMode(false));
 
-            async function setAutofixMode(value) {
+            async function setFixMode(value) {
                 resultEl.textContent = '';
                 resultEl.className = 'status';
                 const token = document.getElementById('settingsToken').value.trim();
                 try {
-                    const res = await fetch('/settings/autofix-mode', {
+                    const res = await fetch('/settings/fix-mode', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                             ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
                             ...(getUserToken() ? { 'X-Guardrails-User': getUserToken() } : {})
                         },
-                        body: JSON.stringify({ autofix_default: value })
+                        body: JSON.stringify({ fix_mode_default: value })
                     });
                     const data = await res.json();
                     if (!res.ok) {
-                        throw new Error(data.error || 'Failed to update auto-fix.');
+                        throw new Error(data.error || 'Failed to update fix mode.');
                     }
-                    resultEl.textContent = 'Auto-fix updated.';
+                    resultEl.textContent = 'Fix mode updated.';
                     resultEl.classList.add('success');
-                    (value ? autofixOnBtn : autofixOffBtn).classList.add('pulse');
-                    setTimeout(() => (value ? autofixOnBtn : autofixOffBtn).classList.remove('pulse'), 650);
+                    if (value === 'full') {
+                        fixFullBtn.classList.add('pulse');
+                        setTimeout(() => fixFullBtn.classList.remove('pulse'), 650);
+                    } else if (value === 'safe') {
+                        fixSafeBtn.classList.add('pulse');
+                        setTimeout(() => fixSafeBtn.classList.remove('pulse'), 650);
+                    } else {
+                        fixNoneBtn.classList.add('pulse');
+                        setTimeout(() => fixNoneBtn.classList.remove('pulse'), 650);
+                    }
                     await refreshStatus();
                 } catch (err) {
-                    resultEl.textContent = err.message || 'Failed to update auto-fix.';
+                    resultEl.textContent = err.message || 'Failed to update fix mode.';
                     resultEl.classList.add('error');
                 }
             }
 
-            autofixOnBtn.addEventListener('click', () => setAutofixMode(true));
-            autofixOffBtn.addEventListener('click', () => setAutofixMode(false));
+            fixFullBtn.addEventListener('click', () => setFixMode('full'));
+            fixSafeBtn.addEventListener('click', () => setFixMode('safe'));
+            fixNoneBtn.addEventListener('click', () => setFixMode('none'));
 
             async function setOverrideAllowed(value) {
                 resultEl.textContent = '';
@@ -1091,7 +1108,38 @@ async def set_autofix_mode(request: Request):
         return JSONResponse({"error": "autofix_default must be a boolean."}, status_code=400)
     if not user_key:
         APP_SETTINGS["autofix_default"] = value
+        if value:
+            APP_SETTINGS["fix_mode_default"] = "safe"
+        else:
+            APP_SETTINGS["fix_mode_default"] = "none"
     persisted = settings_store.save_autofix_default(value, user_key=user_key)
+    settings_store.save_fix_mode_default("safe" if value else "none", user_key=user_key)
+    if not persisted:
+        return JSONResponse({
+            "result": "saved",
+            "persistent": False,
+            "warning": "SETTINGS_ENC_KEY not set; setting stored in memory only.",
+        })
+    return JSONResponse({"result": "saved", "persistent": True})
+
+
+@app.post("/settings/fix-mode")
+async def set_fix_mode(request: Request):
+    auth_error = _require_settings_token(request)
+    if auth_error:
+        return JSONResponse({"error": auth_error}, status_code=401)
+    user_key = _get_user_scope_key(request)
+    if not _is_global_scope() and not user_key:
+        return JSONResponse({"error": "User scope required. Set X-Guardrails-User header."}, status_code=400)
+    data = await request.json()
+    value = data.get("fix_mode_default")
+    if not isinstance(value, str) or value not in {"full", "safe", "none"}:
+        return JSONResponse({"error": "fix_mode_default must be one of full|safe|none."}, status_code=400)
+    if not user_key:
+        APP_SETTINGS["fix_mode_default"] = value
+        APP_SETTINGS["autofix_default"] = value in {"safe", "full"}
+    persisted = settings_store.save_fix_mode_default(value, user_key=user_key)
+    settings_store.save_autofix_default(value in {"safe", "full"}, user_key=user_key)
     if not persisted:
         return JSONResponse({
             "result": "saved",
