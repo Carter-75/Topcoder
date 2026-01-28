@@ -1,11 +1,15 @@
 
 from fastapi import FastAPI, Request, BackgroundTasks, Response as FastAPIResponse
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse, Response
 import sys
 import os
 import re
 import uuid
+import time
+import threading
 from typing import Dict, Any, List
+from pydantic import BaseModel, Field
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import security_rules
@@ -32,6 +36,143 @@ APP_SETTINGS: Dict[str, Any] = {
     "ai_model": settings_store.load_ai_model(),
     "ai_review_max_chars": settings_store.load_ai_review_max_chars(),
 }
+
+RATE_LIMIT_RPS = int(os.environ.get("RATE_LIMIT_RPS", "10"))
+RATE_LIMIT_BURST = int(os.environ.get("RATE_LIMIT_BURST", "20"))
+RATE_LIMIT_WINDOW = int(os.environ.get("RATE_LIMIT_WINDOW", "10"))
+RATE_LIMIT_ENABLED = os.environ.get("RATE_LIMIT_ENABLED", "true").lower() == "true"
+SECURE_COOKIES = os.environ.get("SECURE_COOKIES", "false").lower() == "true"
+
+_RATE_LIMIT_STORE: Dict[str, List[float]] = {}
+_RATE_LIMIT_LOCK = threading.Lock()
+
+
+class CodeFile(BaseModel):
+    path: str
+    code: str
+    patch: str | None = None
+    language: str | None = None
+
+
+class AnalyzeRequest(BaseModel):
+    code: str = ""
+    sector: str | None = None
+    repo_path: str = "."
+    policy: dict | None = None
+    ai_generated: bool = False
+    ai_api_key: str | None = None
+    require_ai_review: bool | None = None
+    ai_model: str | None = None
+    ai_review_max_chars: int | None = None
+    path: str | None = None
+    language: str | None = None
+    patch: str | None = None
+    repo: str | None = None
+    pr_number: int | None = None
+    commit: str | None = None
+    repo_license_texts: List[Dict[str, str]] | None = None
+
+
+class AnalyzeBatchRequest(BaseModel):
+    files: List[CodeFile] = Field(default_factory=list)
+    sector: str | None = None
+    repo_path: str = "."
+    policy: dict | None = None
+    ai_generated: bool = False
+    ai_api_key: str | None = None
+    require_ai_review: bool | None = None
+    ai_model: str | None = None
+    ai_review_max_chars: int | None = None
+    repo: str | None = None
+    pr_number: int | None = None
+    commit: str | None = None
+    repo_license_texts: List[Dict[str, str]] | None = None
+
+
+class AsyncScanRequest(AnalyzeBatchRequest):
+    user_key: str | None = None
+
+
+class RulepackUploadRequest(BaseModel):
+    name: str
+    rules: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class AuditResolveRequest(BaseModel):
+    audit_id: str
+    resolution: str
+    actor: str | None = None
+
+
+class AutofixFullRequest(BaseModel):
+    code: str
+    path: str | None = "unknown"
+    findings: List[Dict[str, Any]] = Field(default_factory=list)
+    repo_path: str | None = None
+    ai_model: str | None = None
+    ai_api_key: str | None = None
+
+
+def _get_client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    if request.client:
+        return request.client.host
+    return "unknown"
+
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    if not RATE_LIMIT_ENABLED:
+        return await call_next(request)
+    key = _get_client_ip(request)
+    now = time.time()
+    window = max(1, RATE_LIMIT_WINDOW)
+    max_requests = (RATE_LIMIT_RPS * window) + RATE_LIMIT_BURST
+    with _RATE_LIMIT_LOCK:
+        timestamps = _RATE_LIMIT_STORE.get(key, [])
+        timestamps = [ts for ts in timestamps if now - ts < window]
+        if len(timestamps) >= max_requests:
+            return JSONResponse({"error": "Rate limit exceeded."}, status_code=429)
+        timestamps.append(now)
+        _RATE_LIMIT_STORE[key] = timestamps
+    return await call_next(request)
+
+
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+    response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+    csp = " ".join([
+        "default-src 'self';",
+        "img-src 'self' data:;",
+        "style-src 'self' 'unsafe-inline' https://unpkg.com;",
+        "script-src 'self' 'unsafe-inline' https://unpkg.com;",
+        "connect-src 'self';",
+        "frame-ancestors 'none';",
+    ])
+    response.headers["Content-Security-Policy"] = csp
+    if SECURE_COOKIES or request.url.scheme == "https":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
+
+
+cors_origins_env = os.environ.get("CORS_ALLOW_ORIGINS", "").strip()
+if cors_origins_env:
+    origins = [item.strip() for item in cors_origins_env.split(",") if item.strip()]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["*"]
+    )
 
 def _resolve_sector(data: dict, repo_path: str) -> str:
     if data.get("sector"):
@@ -89,6 +230,19 @@ def _require_settings_token(request: Request) -> str | None:
     if auth.startswith("Bearer ") and auth.split(" ", 1)[1] == token:
         return None
     return "Missing or invalid settings token."
+
+
+def _require_api_token(request: Request, env_name: str, header_name: str) -> str | None:
+    token = os.environ.get(env_name, "").strip()
+    if not token:
+        return None
+    auth = request.headers.get("authorization", "")
+    provided = auth.split(" ", 1)[1] if auth.lower().startswith("bearer ") else None
+    if not provided:
+        provided = request.headers.get(header_name)
+    if provided == token:
+        return None
+    return "Missing or invalid API token."
 
 def _resolve_require_ai_review(data: dict, request: Request | None = None) -> bool:
     if "require_ai_review" in data and isinstance(data.get("require_ai_review"), bool):
@@ -447,7 +601,7 @@ def get_settings(request: Request, response: FastAPIResponse):
     user_key = _get_user_scope_key(request)
     if os.environ.get("SETTINGS_SCOPE", "global").lower() == "user" and not user_key:
         user_key = uuid.uuid4().hex
-        response.set_cookie("guardrails_user", user_key, httponly=False, samesite="Lax")
+        response.set_cookie("guardrails_user", user_key, httponly=True, samesite="Lax", secure=SECURE_COOKIES)
     require_ai = _resolve_require_ai_review({}, request=request)
     stored_key = settings_store.load_api_key(user_key)
     stored_ai = settings_store.load_require_ai_review_default(user_key)
@@ -473,8 +627,27 @@ def get_settings(request: Request, response: FastAPIResponse):
 @app.post("/settings/token")
 def issue_user_token(response: FastAPIResponse):
     user_key = uuid.uuid4().hex
-    response.set_cookie("guardrails_user", user_key, httponly=False, samesite="Lax")
+    response.set_cookie("guardrails_user", user_key, httponly=True, samesite="Lax", secure=SECURE_COOKIES)
     return {"user_token": user_key}
+
+
+@app.get("/settings/token/current")
+def current_user_token(request: Request):
+    user_key = _get_user_scope_key(request)
+    return {"user_token": user_key}
+
+
+@app.post("/settings/token/assign")
+async def assign_user_token(request: Request, response: FastAPIResponse):
+    auth_error = _require_settings_token(request)
+    if auth_error:
+        return JSONResponse({"error": auth_error}, status_code=401)
+    data = await request.json()
+    token = data.get("user_token")
+    if not isinstance(token, str) or not token.strip():
+        return JSONResponse({"error": "user_token is required."}, status_code=400)
+    response.set_cookie("guardrails_user", token.strip(), httponly=True, samesite="Lax", secure=SECURE_COOKIES)
+    return {"user_token": token.strip()}
 
 @app.get("/settings/ui")
 def settings_ui():
@@ -650,62 +823,52 @@ def settings_ui():
             const aiMaxInput = document.getElementById('aiMaxInput');
             const saveModelBtn = document.getElementById('saveModelBtn');
             const saveMaxBtn = document.getElementById('saveMaxBtn');
-            function getUserToken() {
-                const stored = localStorage.getItem('guardrails_user_token');
-                return stored ? stored.trim() : '';
-            }
+            let currentToken = '';
 
-            async function ensureUserToken() {
-                const stored = localStorage.getItem('guardrails_user_token');
-                if (stored) {
-                    tokenValueEl.textContent = stored;
-                    return stored;
-                }
+            async function fetchCurrentToken() {
                 try {
-                    const res = await fetch('/settings/token');
+                    const res = await fetch('/settings/token/current');
                     const data = await res.json();
                     if (data.user_token) {
-                        localStorage.setItem('guardrails_user_token', data.user_token);
+                        currentToken = data.user_token;
                         tokenValueEl.textContent = data.user_token;
                         return data.user_token;
                     }
                 } catch (err) {
-                    // fall back to local token
+                    // ignore
                 }
-                const array = new Uint8Array(16);
-                crypto.getRandomValues(array);
-                const token = Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('');
-                localStorage.setItem('guardrails_user_token', token);
-                tokenValueEl.textContent = token;
-                return token;
+                return '';
+            }
+
+            async function issueToken() {
+                const res = await fetch('/settings/token', { method: 'POST' });
+                const data = await res.json();
+                if (data.user_token) {
+                    currentToken = data.user_token;
+                    tokenValueEl.textContent = data.user_token;
+                    return data.user_token;
+                }
+                return '';
+            }
+
+            async function ensureUserToken() {
+                const existing = await fetchCurrentToken();
+                if (existing) {
+                    return existing;
+                }
+                return await issueToken();
             }
 
             async function regenerateToken() {
-                try {
-                    const res = await fetch('/settings/token');
-                    const data = await res.json();
-                    if (data.user_token) {
-                        localStorage.setItem('guardrails_user_token', data.user_token);
-                        tokenValueEl.textContent = data.user_token;
-                        return;
-                    }
-                } catch (err) {
-                    // fallback to random
-                }
-                const array = new Uint8Array(16);
-                crypto.getRandomValues(array);
-                const token = Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('');
-                localStorage.setItem('guardrails_user_token', token);
-                tokenValueEl.textContent = token;
+                return await issueToken();
             }
 
             copyTokenBtn.addEventListener('click', async () => {
-                const token = localStorage.getItem('guardrails_user_token') || '';
-                if (!token) {
+                if (!currentToken) {
                     return;
                 }
                 try {
-                    await navigator.clipboard.writeText(token);
+                    await navigator.clipboard.writeText(currentToken);
                     copyTokenBtn.classList.add('pulse');
                     setTimeout(() => copyTokenBtn.classList.remove('pulse'), 650);
                 } catch (err) {
@@ -726,21 +889,35 @@ def settings_ui():
                     resultEl.className = 'status error';
                     return;
                 }
-                localStorage.setItem('guardrails_user_token', value);
-                tokenValueEl.textContent = value;
-                tokenInput.value = '';
-                resultEl.textContent = 'Token updated locally.';
-                resultEl.className = 'status success';
-                await refreshStatus();
+                const token = document.getElementById('settingsToken').value.trim();
+                try {
+                    const res = await fetch('/settings/token/assign', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                        },
+                        body: JSON.stringify({ user_token: value })
+                    });
+                    const data = await res.json();
+                    if (!res.ok) {
+                        throw new Error(data.error || 'Failed to assign token.');
+                    }
+                    currentToken = data.user_token || value;
+                    tokenValueEl.textContent = currentToken;
+                    tokenInput.value = '';
+                    resultEl.textContent = 'Token updated.';
+                    resultEl.className = 'status success';
+                    await refreshStatus();
+                } catch (err) {
+                    resultEl.textContent = err.message || 'Failed to assign token.';
+                    resultEl.className = 'status error';
+                }
             });
 
             async function refreshStatus() {
                 try {
-                    const res = await fetch('/settings', {
-                        headers: {
-                            ...(getUserToken() ? { 'X-Guardrails-User': getUserToken() } : {})
-                        }
-                    });
+                    const res = await fetch('/settings');
                     const data = await res.json();
                     statusEl.textContent = data.openai_api_key_set
                         ? 'API key is configured.'
@@ -817,7 +994,6 @@ def settings_ui():
                 } catch (err) {
                     statusEl.textContent = 'Unable to load status.';
                     aiModeEl.textContent = 'Unable to load AI mode.';
-                    autofixEl.textContent = 'Unable to load auto-fix.';
                     overrideEl.textContent = 'Unable to load override settings.';
                     aiModelStatus.textContent = 'Unable to load AI model.';
                     aiMaxStatus.textContent = 'Unable to load AI limit.';
@@ -840,8 +1016,7 @@ def settings_ui():
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-                            ...(getUserToken() ? { 'X-Guardrails-User': getUserToken() } : {})
+                            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
                         },
                         body: JSON.stringify({ api_key: apiKey })
                     });
@@ -870,8 +1045,7 @@ def settings_ui():
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-                            ...(getUserToken() ? { 'X-Guardrails-User': getUserToken() } : {})
+                            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
                         },
                         body: JSON.stringify({ require_ai_review: value })
                     });
@@ -902,8 +1076,7 @@ def settings_ui():
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-                            ...(getUserToken() ? { 'X-Guardrails-User': getUserToken() } : {})
+                            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
                         },
                         body: JSON.stringify({ fix_mode_default: value })
                     });
@@ -943,8 +1116,7 @@ def settings_ui():
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-                            ...(getUserToken() ? { 'X-Guardrails-User': getUserToken() } : {})
+                            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
                         },
                         body: JSON.stringify({ override_allowed_default: value })
                     });
@@ -982,8 +1154,7 @@ def settings_ui():
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-                            ...(getUserToken() ? { 'X-Guardrails-User': getUserToken() } : {})
+                            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
                         },
                         body: JSON.stringify({ ai_model: value })
                     });
@@ -1019,8 +1190,7 @@ def settings_ui():
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-                            ...(getUserToken() ? { 'X-Guardrails-User': getUserToken() } : {})
+                            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
                         },
                         body: JSON.stringify({ ai_review_max_chars: value })
                     });
@@ -1150,11 +1320,14 @@ async def set_fix_mode(request: Request):
 
 
 @app.post("/autofix/full")
-async def full_fix_rewrite(request: Request):
+async def full_fix_rewrite(payload: AutofixFullRequest, request: Request):
+    auth_error = _require_api_token(request, "GUARDRAILS_API_TOKEN", "x-guardrails-token")
+    if auth_error:
+        return JSONResponse({"error": auth_error}, status_code=401)
     user_key = _get_user_scope_key(request)
     if not _is_global_scope() and not user_key:
         return JSONResponse({"error": "User scope required. Set X-Guardrails-User header."}, status_code=400)
-    data = await request.json()
+    data = payload.model_dump()
     code = data.get("code")
     path = data.get("path", "unknown")
     findings = data.get("findings", [])
@@ -1251,8 +1424,11 @@ async def set_override_allowed(request: Request):
     return JSONResponse({"result": "saved", "persistent": True})
 
 @app.post("/analyze")
-async def analyze(request: Request):
-    data = await request.json()
+async def analyze(payload: AnalyzeRequest, request: Request):
+    auth_error = _require_api_token(request, "GUARDRAILS_API_TOKEN", "x-guardrails-token")
+    if auth_error:
+        return JSONResponse({"error": auth_error}, status_code=401)
+    data = payload.model_dump()
     if not _is_global_scope() and not _get_user_scope_key(request):
         return JSONResponse({"error": "User scope required. Set X-Guardrails-User header."}, status_code=400)
     code = data.get("code", "")
@@ -1315,8 +1491,11 @@ async def analyze(request: Request):
     return JSONResponse(result)
 
 @app.post("/analyze-batch")
-async def analyze_batch(request: Request):
-    data = await request.json()
+async def analyze_batch(payload: AnalyzeBatchRequest, request: Request):
+    auth_error = _require_api_token(request, "GUARDRAILS_API_TOKEN", "x-guardrails-token")
+    if auth_error:
+        return JSONResponse({"error": auth_error}, status_code=401)
+    data = payload.model_dump()
     if not _is_global_scope() and not _get_user_scope_key(request):
         return JSONResponse({"error": "User scope required. Set X-Guardrails-User header."}, status_code=400)
     files = data.get("files", [])
@@ -1409,7 +1588,10 @@ async def analyze_batch(request: Request):
     return JSONResponse(result)
 
 @app.get("/report/summary")
-def report_summary():
+def report_summary(request: Request):
+    auth_error = _require_api_token(request, "GUARDRAILS_ADMIN_TOKEN", "x-guardrails-admin")
+    if auth_error:
+        return JSONResponse({"error": auth_error}, status_code=401)
     entries = audit_log.export_audit_log()
     summary = {
         "total_requests": len(entries),
@@ -1430,7 +1612,10 @@ def report_summary():
     return JSONResponse(summary)
 
 @app.get("/report/trends")
-def report_trends():
+def report_trends(request: Request):
+    auth_error = _require_api_token(request, "GUARDRAILS_ADMIN_TOKEN", "x-guardrails-admin")
+    if auth_error:
+        return JSONResponse({"error": auth_error}, status_code=401)
     entries = audit_log.export_audit_log()
     trends: Dict[str, Any] = {}
     for entry in entries:
@@ -1452,8 +1637,11 @@ def list_rulepacks():
     return JSONResponse({"rulepacks": sorted(names)})
 
 @app.post("/rulepacks")
-async def upload_rulepack(request: Request):
-    data = await request.json()
+async def upload_rulepack(payload: RulepackUploadRequest, request: Request):
+    auth_error = _require_api_token(request, "GUARDRAILS_ADMIN_TOKEN", "x-guardrails-admin")
+    if auth_error:
+        return JSONResponse({"error": auth_error}, status_code=401)
+    data = payload.model_dump()
     name = data.get("name", "")
     rules = data.get("rules", [])
     if not re.match(r"^[a-zA-Z0-9_-]+$", name):
@@ -1469,12 +1657,18 @@ async def upload_rulepack(request: Request):
     return JSONResponse({"result": "saved", "name": name})
 
 @app.get("/audit/export")
-def export_audit():
+def export_audit(request: Request):
+    auth_error = _require_api_token(request, "GUARDRAILS_ADMIN_TOKEN", "x-guardrails-admin")
+    if auth_error:
+        return JSONResponse({"error": auth_error}, status_code=401)
     return JSONResponse({"entries": audit_log.export_audit_log()})
 
 @app.post("/audit/resolve")
-async def resolve_audit(request: Request):
-    data = await request.json()
+async def resolve_audit(payload: AuditResolveRequest, request: Request):
+    auth_error = _require_api_token(request, "GUARDRAILS_ADMIN_TOKEN", "x-guardrails-admin")
+    if auth_error:
+        return JSONResponse({"error": auth_error}, status_code=401)
+    data = payload.model_dump()
     audit_id = data.get("audit_id")
     resolution = data.get("resolution")
     actor = data.get("actor")
@@ -1543,8 +1737,11 @@ def _run_async_scan(job_id: str, payload: dict) -> None:
     JOB_STORE[job_id]["result"] = result
 
 @app.post("/scan/async")
-async def scan_async(request: Request, background_tasks: BackgroundTasks):
-    data = await request.json()
+async def scan_async(payload: AsyncScanRequest, request: Request, background_tasks: BackgroundTasks):
+    auth_error = _require_api_token(request, "GUARDRAILS_API_TOKEN", "x-guardrails-token")
+    if auth_error:
+        return JSONResponse({"error": auth_error}, status_code=401)
+    data = payload.model_dump()
     repo_path = data.get("repo_path", ".")
     residency_error = _enforce_data_residency(repo_path)
     if residency_error:

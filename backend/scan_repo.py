@@ -65,6 +65,7 @@ def analyze_batch(
     sector: str,
     repo_path: str,
     api_key: str | None,
+    api_token: str | None,
     require_ai_review: bool | None,
     ai_model: str | None,
     ai_review_max_chars: int | None,
@@ -81,6 +82,8 @@ def analyze_batch(
     headers = {}
     if api_key:
         headers["X-OpenAI-API-Key"] = api_key
+    if api_token:
+        headers["Authorization"] = f"Bearer {api_token}"
     if user_key:
         headers["X-Guardrails-User"] = user_key
     resp = requests.post(f"{api_url.rstrip('/')}/analyze-batch", json=payload, headers=headers, timeout=60)
@@ -105,6 +108,7 @@ def main(argv: List[str] | None = None) -> int:
     parser.add_argument("--extensions", default=",".join(sorted(DEFAULT_EXTENSIONS)), help="Comma-separated file extensions")
     parser.add_argument("--exclude-dirs", default=",".join(sorted(DEFAULT_EXCLUDE_DIRS)), help="Comma-separated directory names to skip")
     parser.add_argument("--api-key", default=os.environ.get("OPENAI_API_KEY", ""), help="OpenAI API key (or set OPENAI_API_KEY)")
+    parser.add_argument("--api-token", default=os.environ.get("GUARDRAILS_API_TOKEN", ""), help="Guardrails API token (or set GUARDRAILS_API_TOKEN)")
     parser.add_argument("--ai-model", default=os.environ.get("OPENAI_MODEL", ""), help="AI model override (or set OPENAI_MODEL)")
     parser.add_argument("--ai-max-chars", type=int, default=0, help="AI review max chars override (or set AI_REVIEW_MAX_CHARS)")
     parser.add_argument("--user", default=os.environ.get("GUARDRAILS_USER", ""), help="User token for scoped settings")
@@ -117,6 +121,7 @@ def main(argv: List[str] | None = None) -> int:
 
     repo_path = os.path.abspath(args.repo)
     api_key = args.api_key.strip()
+    api_token = args.api_token.strip()
     ai_model = args.ai_model.strip()
     ai_review_max_chars = args.ai_max_chars if args.ai_max_chars > 0 else 0
     user_key = args.user.strip() or None
@@ -230,6 +235,7 @@ def main(argv: List[str] | None = None) -> int:
                     args.sector,
                     repo_path,
                     api_key or None,
+                    api_token or None,
                     require_ai_review,
                     ai_model or None,
                     ai_review_max_chars if ai_review_max_chars > 0 else None,
@@ -251,6 +257,7 @@ def main(argv: List[str] | None = None) -> int:
                 args.sector,
                 repo_path,
                 api_key or None,
+                api_token or None,
                 require_ai_review,
                 ai_model or None,
                 ai_review_max_chars if ai_review_max_chars > 0 else None,

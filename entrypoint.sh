@@ -19,6 +19,24 @@ PY
   fi
 fi
 
+if [ -z "${GUARDRAILS_API_TOKEN:-}" ]; then
+  GUARDRAILS_API_TOKEN="$(python - <<'PY'
+import secrets
+print(secrets.token_hex(32))
+PY
+)"
+  export GUARDRAILS_API_TOKEN
+fi
+
+if [ -z "${GUARDRAILS_ADMIN_TOKEN:-}" ]; then
+  GUARDRAILS_ADMIN_TOKEN="$(python - <<'PY'
+import secrets
+print(secrets.token_hex(32))
+PY
+)"
+  export GUARDRAILS_ADMIN_TOKEN
+fi
+
 if [ "${PUBLISH_CLI:-}" = "true" ] && [ -f "/app/publish_cli.py" ] && [ -f "/app/pyproject.toml" ]; then
   python /app/publish_cli.py
 fi

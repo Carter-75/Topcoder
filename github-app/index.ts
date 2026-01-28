@@ -381,6 +381,8 @@ export = (app: Probot) => {
     const aiGenerated = detectCopilot(pr.title) || detectCopilot(pr.body) || commits.data.some((commit: any) => detectCopilot(commit.commit?.message));
 
     const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
+    const backendToken = process.env.BACKEND_TOKEN || "";
+    const authHeaders = backendToken ? { Authorization: `Bearer ${backendToken}` } : {};
     const useAsync = process.env.USE_ASYNC_SCAN === "true";
     const repoLicenseTexts = await fetchLicenseTexts(context, owner, repoName, ref);
     const requestPayload = {
@@ -398,7 +400,7 @@ export = (app: Probot) => {
     if (useAsync) {
       const startRes = await fetch(`${backendUrl}/scan/async`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify(requestPayload),
       });
       const startData = await startRes.json();
@@ -420,7 +422,7 @@ export = (app: Probot) => {
     } else {
       const res = await fetch(`${backendUrl}/analyze-batch`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify(requestPayload),
       });
       result = (await res.json()) as AnalyzeBatchResponse;
@@ -536,6 +538,8 @@ export = (app: Probot) => {
 
     const aiGenerated = payload.commits?.some((commit: any) => detectCopilot(commit.message)) || false;
     const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
+    const backendToken = process.env.BACKEND_TOKEN || "";
+    const authHeaders = backendToken ? { Authorization: `Bearer ${backendToken}` } : {};
     const useAsync = process.env.USE_ASYNC_SCAN === "true";
     const repoLicenseTexts = await fetchLicenseTexts(context, owner, repoName, headSha);
     const requestPayload = {
@@ -552,7 +556,7 @@ export = (app: Probot) => {
     if (useAsync) {
       const startRes = await fetch(`${backendUrl}/scan/async`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify(requestPayload),
       });
       const startData = await startRes.json();
@@ -574,7 +578,7 @@ export = (app: Probot) => {
     } else {
       const res = await fetch(`${backendUrl}/analyze-batch`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify(requestPayload),
       });
       result = (await res.json()) as AnalyzeBatchResponse;
