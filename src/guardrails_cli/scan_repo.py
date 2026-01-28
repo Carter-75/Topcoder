@@ -457,6 +457,6 @@ def main(argv: Optional[List[str]] = None) -> int:
     if full_fix_enabled:
         total_remaining = sum(value for value in remaining_counts.values())
         if total_remaining > 0:
-            print("Full fix mode: findings remain after autofix.")
+            print("Full fix mode: findings remain after safe + AI fix.")
             return 2
     return 0
