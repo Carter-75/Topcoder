@@ -2,7 +2,7 @@ name: Guardrails GitHub App
 description: Run Guardrails PR checks and comments from GitHub Actions.
 runs:
   using: docker
-  image: Dockerfile
+  image: Dockerfile.action
 branding:
   icon: shield
   color: purple
