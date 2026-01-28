@@ -95,6 +95,21 @@ def save_user_settings(user_key: str | None, user_settings: Dict[str, Any]) -> b
     return save_settings(settings)
 
 
+def clone_user_settings(from_user: str | None, to_user: str | None) -> bool:
+    if not from_user or not to_user:
+        return False
+    settings = load_settings()
+    users = settings.get("users")
+    if not isinstance(users, dict):
+        users = {}
+    source = users.get(from_user)
+    if not isinstance(source, dict):
+        return False
+    users[to_user] = dict(source)
+    settings["users"] = users
+    return save_settings(settings)
+
+
 def load_api_key(user_key: str | None = None) -> Optional[str]:
     settings = load_user_settings(user_key)
     return settings.get("openai_api_key")

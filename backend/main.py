@@ -625,8 +625,11 @@ def get_settings(request: Request, response: FastAPIResponse):
     }
 
 @app.post("/settings/token")
-def issue_user_token(response: FastAPIResponse):
+def issue_user_token(request: Request, response: FastAPIResponse):
+    previous_key = _get_user_scope_key(request)
     user_key = uuid.uuid4().hex
+    if previous_key and previous_key != user_key:
+        settings_store.clone_user_settings(previous_key, user_key)
     response.set_cookie("guardrails_user", user_key, httponly=True, samesite="Lax", secure=SECURE_COOKIES)
     return {"user_token": user_key}
 
