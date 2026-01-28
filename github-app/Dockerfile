@@ -16,4 +16,4 @@ ENV PORT=3000 \
 	OVERRIDE_LABEL=guardrails-override
 EXPOSE 3000
 
-CMD ["node", "/app/dist/index.js"]
+CMD ["node", "/app/dist/action.js"]
