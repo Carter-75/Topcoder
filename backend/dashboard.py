@@ -55,7 +55,7 @@ def dashboard():
                 <div class="actions">
                     <a href='/settings/ui'>Settings</a>
                 </div>
-                <p class="summary">Total Analyses: <b>{count}</b></p>
+                <p class="summary">Total Analyses: <b>__COUNT__</b></p>
             <table>
                 <tr>
                     <th>Timestamp</th>
@@ -83,5 +83,6 @@ def dashboard():
         </div>
     </body>
     </html>
-    """.format(count=len(entries))
+    """
+    html = html.replace("__COUNT__", str(len(entries)))
     return HTMLResponse(content=html)
