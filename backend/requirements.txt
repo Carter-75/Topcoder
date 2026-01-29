@@ -1,3 +1,9 @@
+# NOTE FROM MAINTAINER:
+# I have to pin protobuf<6.0 here because some dependencies (like Google and Semgrep) don't support 6.x yet.
+# Unfortunately, all protobuf 5.x versions have CVE-2026-0994 and there's no fixed release as of Jan 2026.
+# If you don't use Google AI stuff, you could try protobuf>=6.34.0, but it might break other things.
+# I'll update this as soon as a safe version is available—keep an eye out for dependency updates!
+
 fastapi
 uvicorn
 pyyaml
@@ -5,5 +11,5 @@ pytest
 requests
 cryptography
 httpx
-protobuf<6.0
 semgrep
+protobuf<6.0

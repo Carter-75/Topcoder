@@ -1,5 +1,9 @@
 # Topcoder Guardrails
 
+## ⚠️ Security Notice: protobuf CVE-2026-0994
+
+This project requires `protobuf<6.0` for compatibility with Google and Semgrep dependencies. All protobuf 5.x versions are currently affected by CVE-2026-0994, and there is no fixed version as of January 2026. If you do not use Google AI packages, you may try `protobuf>=6.34.0`, but this may break other dependencies. Monitor for updates to dependencies that support protobuf 6.x or a patched 5.x release. Until then, pip-audit will report this known vulnerability, but it is required for compatibility.
+
 Enterprise-grade guardrails for GitHub Copilot workflows: a FastAPI backend, GitHub App integration, and CLI that enforce security, policy, and licensing standards with explainable AI + static analysis.
 
 ## Deployed URL
