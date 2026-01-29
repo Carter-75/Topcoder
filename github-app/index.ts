@@ -5,6 +5,8 @@ import yaml from "js-yaml";
 type GuardrailsConfig = {
   sector?: string;
   policy?: Record<string, string>;
+  ai_generated?: boolean;
+  ai_generated_labels?: string[];
 };
 
 type AnalyzeBatchResponse = {
@@ -19,7 +21,9 @@ type AnalyzeBatchResponse = {
 const MAX_FILES = Number(process.env.MAX_FILES || 100);
 const MAX_FILE_BYTES = Number(process.env.MAX_FILE_BYTES || 200_000);
 const OVERRIDE_LABEL = process.env.OVERRIDE_LABEL || "guardrails-override";
+const AI_GENERATED_ENV = process.env.AI_GENERATED || "";
 const REVIEW_MARKER = "<!-- guardrails-review -->";
+const DEFAULT_AI_LABELS = ["ai-generated", "copilot-generated", "copilot", "ai"];
 const LICENSE_FILES = [
   "LICENSE",
   "LICENSE.txt",
@@ -318,6 +322,41 @@ const detectCopilot = (text?: string) => {
   return /copilot/i.test(text) || /Co-authored-by:\s*GitHub Copilot/i.test(text);
 };
 
+const parseBoolean = (value?: string) => {
+  if (!value) return false;
+  return ["1", "true", "yes", "y"].includes(value.toLowerCase());
+};
+
+const resolveAiGenerated = (input: {
+  config?: GuardrailsConfig;
+  labels?: string[];
+  prTitle?: string;
+  prBody?: string;
+  commitMessages?: string[];
+  envValue?: string;
+}) => {
+  if (typeof input.config?.ai_generated === "boolean") {
+    return input.config.ai_generated;
+  }
+  if (parseBoolean(input.envValue)) {
+    return true;
+  }
+  const labelSet = new Set(
+    (input.config?.ai_generated_labels?.length ? input.config.ai_generated_labels : DEFAULT_AI_LABELS)
+      .map((label) => label.toLowerCase())
+  );
+  if (input.labels?.some((label) => labelSet.has(label.toLowerCase()))) {
+    return true;
+  }
+  if (detectCopilot(input.prTitle) || detectCopilot(input.prBody)) {
+    return true;
+  }
+  if (input.commitMessages?.some((message) => detectCopilot(message))) {
+    return true;
+  }
+  return false;
+};
+
 export = (app: Probot) => {
   app.on(["pull_request.opened", "pull_request.synchronize", "pull_request.reopened"], async (context: Context) => {
     const eventPayload = context.payload as any;
@@ -379,7 +418,16 @@ export = (app: Probot) => {
     }
 
     const commits = await context.octokit.pulls.listCommits({ owner, repo: repoName, pull_number: pr.number, per_page: 100 });
-    const aiGenerated = detectCopilot(pr.title) || detectCopilot(pr.body) || commits.data.some((commit: any) => detectCopilot(commit.commit?.message));
+    const commitMessages = commits.data.map((commit: any) => commit.commit?.message || "");
+    const prLabels = pr.labels?.map((label: any) => label.name) || [];
+    const aiGenerated = resolveAiGenerated({
+      config,
+      labels: prLabels,
+      prTitle: pr.title,
+      prBody: pr.body,
+      commitMessages,
+      envValue: AI_GENERATED_ENV,
+    });
 
     const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
     const backendToken = process.env.BACKEND_TOKEN || "";
@@ -555,7 +603,11 @@ export = (app: Probot) => {
       }
     }
 
-    const aiGenerated = payload.commits?.some((commit: any) => detectCopilot(commit.message)) || false;
+    const commitMessages = payload.commits?.map((commit: any) => commit.message) || [];
+    const aiGenerated = resolveAiGenerated({
+      commitMessages,
+      envValue: AI_GENERATED_ENV,
+    });
     const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
     const backendToken = process.env.BACKEND_TOKEN || "";
     const userKey = process.env.GUARDRAILS_USER || process.env.GITHUB_ACTOR || "";

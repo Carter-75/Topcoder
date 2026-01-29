@@ -12,4 +12,8 @@ policy:
   license_detected: warning
   ip_duplication: warning
 
+ai_generated_labels:
+  - ai-generated
+  - copilot-generated
+
 # You can override or extend rules per repo or org.

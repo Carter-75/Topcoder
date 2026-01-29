@@ -90,6 +90,7 @@ Environment variables:
 - MAX_FILE_BYTES (optional, default: 200000)
 - USE_ASYNC_SCAN (optional, default: false)
 - LOG_LEVEL (optional, default: info)
+- AI_GENERATED (optional, set to true to force AI-generated mode)
 
 GitHub App hosting environment (Probot runtime):
 - APP_ID (required for webhook-hosted app)
@@ -152,6 +153,11 @@ Option A: GitHub Actions (no webhook)
 3. If you protect endpoints with GUARDRAILS_API_TOKEN, set BACKEND_TOKEN in the workflow env.
 4. No webhook configuration is required.
 
+Recommended non-heuristic AI detection (best option):
+1. Add an explicit PR label (e.g., ai-generated or copilot-generated).
+2. Configure the label list in .guardrails/config.yml using ai_generated_labels.
+3. The GitHub integration will treat labeled PRs as AI-generated without relying on commit message heuristics.
+
 Option B: GitHub App (webhook hosted)
 1. Create a GitHub App in your organization settings.
 2. Set the webhook URL to https://your-app-host/api/github/webhooks and create a WEBHOOK_SECRET.
@@ -159,6 +165,22 @@ Option B: GitHub App (webhook hosted)
 4. Subscribe to events: pull_request, push.
 5. Deploy github-app/ as a Probot app using npm run build and npm run start.
 6. Set APP_ID, PRIVATE_KEY, WEBHOOK_SECRET, BACKEND_URL, and BACKEND_TOKEN in the app host.
+
+## Non-heuristic AI detection (recommended)
+Preferred approach: explicit labels + repo config.
+
+1. Add a PR label in GitHub (e.g., ai-generated).
+2. Add this to your repo config file:
+
+```yaml
+ai_generated_labels:
+	- ai-generated
+	- copilot-generated
+```
+
+Optional overrides:
+- Force AI mode for all scans by adding ai_generated: true in the repo config.
+- Force AI mode in CI by setting AI_GENERATED=true in the workflow env.
 
 ## Local development and testing
 Backend local run:

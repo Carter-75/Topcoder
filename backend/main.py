@@ -413,6 +413,7 @@ def _analyze_code(
     require_ai_review: bool | None = None,
     ai_generated: bool = False,
     ai_context: dict | None = None,
+    language: str | None = None,
     extra_license_ip_issues: List[Dict[str, Any]] | None = None,
     repo_license_issues: List[Dict[str, Any]] | None = None,
     ai_model: str | None = None,
@@ -420,7 +421,7 @@ def _analyze_code(
     user_key: str | None = None,
 ) -> dict:
     issues = security_rules.run_security_rules(code, ai_generated=ai_generated)
-    coding_issues = coding_standards.run_coding_standards_rules(code, repo_path=repo_path)
+    coding_issues = coding_standards.run_coding_standards_rules(code, repo_path=repo_path, language=language)
     license_ip_issues = license_ip.run_license_ip_checks(code, repo_path=repo_path)
     if extra_license_ip_issues:
         license_ip_issues.extend(extra_license_ip_issues)
@@ -1454,7 +1455,7 @@ async def analyze(payload: AnalyzeRequest, request: Request):
     user_key = _get_user_scope_key(request)
     ai_context = {
         "path": data.get("path"),
-        "language": data.get("language"),
+        "language": data.get("language") or _guess_language(data.get("path") or ""),
         "patch": data.get("patch"),
         "repo": data.get("repo"),
         "pr_number": data.get("pr_number"),
@@ -1470,6 +1471,7 @@ async def analyze(payload: AnalyzeRequest, request: Request):
         require_ai_review=require_ai_review,
         ai_generated=bool(data.get("ai_generated")),
         ai_context=ai_context,
+        language=ai_context.get("language"),
         repo_license_issues=repo_license_issues,
         ai_model=ai_model,
         ai_review_max_chars=ai_review_max_chars,
@@ -1536,9 +1538,10 @@ async def analyze_batch(payload: AnalyzeBatchRequest, request: Request):
     for item in files:
         path = item.get("path", "unknown")
         code = item.get("code", "")
+        language = item.get("language") or _guess_language(path)
         ai_context = {
             "path": path,
-            "language": item.get("language"),
+            "language": language,
             "patch": item.get("patch"),
             "repo": data.get("repo"),
             "pr_number": data.get("pr_number"),
@@ -1554,6 +1557,7 @@ async def analyze_batch(payload: AnalyzeBatchRequest, request: Request):
             require_ai_review=require_ai_review,
             ai_generated=bool(data.get("ai_generated")),
             ai_context=ai_context,
+            language=language,
             extra_license_ip_issues=cross_file_issues.get(path, []),
             repo_license_issues=repo_license_issues,
             ai_model=ai_model,
