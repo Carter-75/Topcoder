@@ -78,6 +78,9 @@ Additional backend settings:
 - AUDIT_LOG_MAX_BYTES (default: 5000000)
 - AUDIT_LOG_MAX_FILES (default: 5)
 - AUDIT_LOG_HMAC_KEY (optional)
+- GUARDRAILS_ORG_CONFIG (optional, path to org-level YAML/JSON config)
+- SEMGREP_ENABLED (optional, set to true to enable Semgrep static analysis)
+- SEMGREP_TIMEOUT (optional, default: 20)
 
 ## GitHub App integration
 The GitHub App scans PRs and pushes, posts comments/checks, and reads repo overrides from .guardrails/config.yml|yaml|json.
@@ -181,6 +184,24 @@ ai_generated_labels:
 Optional overrides:
 - Force AI mode for all scans by adding ai_generated: true in the repo config.
 - Force AI mode in CI by setting AI_GENERATED=true in the workflow env.
+
+## Org-level configuration (optional)
+Set GUARDRAILS_ORG_CONFIG to point to a YAML/JSON file. Repo-level .guardrails/config.yml overrides org settings.
+
+Example org config:
+```yaml
+policy:
+	hardcoded_secret: blocking
+	sql_injection_risk: blocking
+coding_standards_builtin:
+	default:
+		naming: true
+		logging: true
+		error_handling: true
+```
+
+## Optional Semgrep integration
+If Semgrep is installed on the backend host, set SEMGREP_ENABLED=true to run Semgrep with the auto ruleset.
 
 ## Local development and testing
 Backend local run:

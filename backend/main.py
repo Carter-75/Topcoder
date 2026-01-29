@@ -22,6 +22,7 @@ import config_loader
 import rule_engine
 import guidelines
 import settings_store
+import static_analysis
 
 # Import dashboard endpoint
 import dashboard
@@ -421,6 +422,9 @@ def _analyze_code(
     user_key: str | None = None,
 ) -> dict:
     issues = security_rules.run_security_rules(code, ai_generated=ai_generated)
+    static_issues = static_analysis.run_static_analysis(code, language)
+    if static_issues:
+        issues.extend(static_issues)
     coding_issues = coding_standards.run_coding_standards_rules(code, repo_path=repo_path, language=language)
     license_ip_issues = license_ip.run_license_ip_checks(code, repo_path=repo_path)
     if extra_license_ip_issues:

@@ -5,5 +5,15 @@
       "name": "guardrails-data",
       "mountPath": "/app"
     }
+  ],
+  "envs": [
+    {
+      "key": "SEMGREP_ENABLED",
+      "value": "true"
+    },
+    {
+      "key": "GUARDRAILS_ORG_CONFIG",
+      "value": "../.guardrails/config.yml"
+    }
   ]
 }
