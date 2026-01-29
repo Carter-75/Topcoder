@@ -58,6 +58,27 @@ Core settings:
 - SETTINGS_TOKEN (optional) — protects settings endpoints
 - REQUIRE_AI_REVIEW_DEFAULT (default: false)
 
+Additional backend settings:
+- OPENAI_MODEL (default: gpt-4o-mini)
+- AI_REVIEW_MAX_CHARS (default: 12000)
+- REQUIRE_AI_REVIEW (default: true)
+- CORS_ALLOW_ORIGINS (optional, comma-separated)
+- DATA_RESIDENCY (optional, must match repo config if set)
+- SECURE_COOKIES (default: false)
+- RATE_LIMIT_ENABLED (default: true)
+- RATE_LIMIT_RPS (default: 10)
+- RATE_LIMIT_BURST (default: 20)
+- RATE_LIMIT_WINDOW (default: 10)
+- SETTINGS_ENC_KEY (optional, used to encrypt settings)
+- SETTINGS_KEY_PATH (optional, generates key if not set)
+- SETTINGS_STORE_PATH (default: settings.enc)
+- AUDIT_LOG_ENABLED (default: true)
+- AUDIT_LOG_STORE_OUTPUT (default: true)
+- AUDIT_LOG_PATH (default: /tmp/audit_log.jsonl)
+- AUDIT_LOG_MAX_BYTES (default: 5000000)
+- AUDIT_LOG_MAX_FILES (default: 5)
+- AUDIT_LOG_HMAC_KEY (optional)
+
 ## GitHub App integration
 The GitHub App scans PRs and pushes, posts comments/checks, and reads repo overrides from .guardrails/config.yml|yaml|json.
 
@@ -68,6 +89,15 @@ Environment variables:
 - MAX_FILES (optional, default: 100)
 - MAX_FILE_BYTES (optional, default: 200000)
 - USE_ASYNC_SCAN (optional, default: false)
+- LOG_LEVEL (optional, default: info)
+
+GitHub App hosting environment (Probot runtime):
+- APP_ID (required for webhook-hosted app)
+- PRIVATE_KEY (required for webhook-hosted app)
+- WEBHOOK_SECRET (required for webhook-hosted app)
+
+GitHub Action environment (recommended for most users):
+- GITHUB_TOKEN (required, provided by GitHub Actions)
 
 ## CLI usage
 Install:
@@ -104,6 +134,44 @@ Notes:
 - Provide their own OpenAI API key via /settings/ui (hosted).
 - Install the CLI only if they want local scans.
 
+## Self-hosting
+### Backend API + Settings UI (Railway or Render)
+The backend serves the API and the settings UI at /settings/ui. It is the "main website" that stores configuration and audit logs.
+
+1. Deploy the Dockerfile in the repository root (recommended for Railway/Render).
+2. Ensure a persistent volume is mounted for settings.enc and audit logs (see railway.json).
+3. Set environment variables listed in the backend configuration section above.
+4. Expose PORT (defaults to 8000).
+
+### GitHub integration options
+You can integrate via GitHub Actions or by hosting a GitHub App webhook server.
+
+Option A: GitHub Actions (no webhook)
+1. Copy the workflow in .github/workflows/guardrails.yml into the target repository.
+2. Set BACKEND_URL to your hosted backend.
+3. If you protect endpoints with GUARDRAILS_API_TOKEN, set BACKEND_TOKEN in the workflow env.
+4. No webhook configuration is required.
+
+Option B: GitHub App (webhook hosted)
+1. Create a GitHub App in your organization settings.
+2. Set the webhook URL to https://your-app-host/api/github/webhooks and create a WEBHOOK_SECRET.
+3. Permissions: Checks (write), Pull Requests (write), Issues (write), Contents (read).
+4. Subscribe to events: pull_request, push.
+5. Deploy github-app/ as a Probot app using npm run build and npm run start.
+6. Set APP_ID, PRIVATE_KEY, WEBHOOK_SECRET, BACKEND_URL, and BACKEND_TOKEN in the app host.
+
+## Local development and testing
+Backend local run:
+1. cd backend
+2. pip install -r requirements.txt
+3. uvicorn main:app --reload --host 0.0.0.0 --port 8000
+
+GitHub App local run (webhook mode):
+1. cd github-app
+2. npm install
+3. npm run build
+4. APP_ID=... PRIVATE_KEY=... WEBHOOK_SECRET=... BACKEND_URL=http://localhost:8000 npm run start
+
 ## CLI settings (optional)
 ```sh
 guardrails settings --issue-user-token
@@ -136,6 +204,6 @@ guardrails settings --issue-user-token
 
 ## Testing
 ```sh
-pytest
+pytest backend/tests
 ```
 - GET /report/summary — Audit summary counts
